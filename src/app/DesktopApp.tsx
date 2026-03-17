@@ -4,8 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
-import type { AppMode, DrawerView, ReaderEntry, ReaderState } from "../types";
-import { breadcrumbParts, formatBytes } from "../utils";
+import type {
+  AppMode,
+  DrawerView,
+  ReaderEntry,
+  ReaderEntryDetails,
+  ReaderState,
+} from "../types";
+import { breadcrumbParts, formatBytes, formatDate } from "../utils";
 
 type TreeNode = {
   key: string;
@@ -41,6 +47,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Digital Editions",
       is_dir: true,
       size: 0,
+      extension: null,
+      modified_at: null,
     },
     {
       name: "Documents",
@@ -48,6 +56,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents",
       is_dir: true,
       size: 0,
+      extension: null,
+      modified_at: null,
     },
     {
       name: "database",
@@ -55,6 +65,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/database",
       is_dir: true,
       size: 0,
+      extension: null,
+      modified_at: null,
     },
   ],
   Documents: [
@@ -64,6 +76,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents/Collections",
       is_dir: true,
       size: 0,
+      extension: null,
+      modified_at: null,
     },
     {
       name: "The Left Hand of Darkness.epub",
@@ -71,6 +85,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents/The Left Hand of Darkness.epub",
       is_dir: false,
       size: 1468006,
+      extension: "epub",
+      modified_at: 1710185100,
     },
     {
       name: "Piranesi.epub",
@@ -78,6 +94,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents/Piranesi.epub",
       is_dir: false,
       size: 841212,
+      extension: "epub",
+      modified_at: 1711101600,
     },
     {
       name: "Essays.pdf",
@@ -85,6 +103,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents/Essays.pdf",
       is_dir: false,
       size: 2860081,
+      extension: "pdf",
+      modified_at: 1709504400,
     },
   ],
   "Documents/Collections": [
@@ -94,6 +114,8 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       absolute_path: "/Volumes/READER/Documents/Collections/Fiction",
       is_dir: true,
       size: 0,
+      extension: null,
+      modified_at: null,
     },
   ],
   "Digital Editions": [],
@@ -120,10 +142,14 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   const [currentDir, setCurrentDir] = useState("");
   const [entries, setEntries] = useState<ReaderEntry[]>([]);
   const [selectedEntry, setSelectedEntry] = useState<ReaderEntry | null>(null);
+  const [selectedEntryDetails, setSelectedEntryDetails] =
+    useState<ReaderEntryDetails | null>(null);
   const [drawerView, setDrawerView] = useState<DrawerView>({ kind: "closed" });
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     void refreshDevice();
@@ -196,6 +222,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         setEntries([]);
         setTreeNodes([]);
         setSelectedEntry(null);
+        setSelectedEntryDetails(null);
         setDrawerView({ kind: "closed" });
         return;
       }
@@ -231,6 +258,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setCurrentDir(targetPath);
     setEntries(nextEntries);
     setSelectedEntry(null);
+    setSelectedEntryDetails(null);
     setDrawerView({ kind: "closed" });
 
     const roots = await listEntries("");
@@ -264,6 +292,66 @@ export function DesktopApp({ mode }: DesktopAppProps) {
       .filter((entry) => entry.is_dir)
       .map(toTreeNode);
     setTreeNodes((current) => updateTreeChildren(current, nodeKey, children));
+  }
+
+  async function searchEntries(query: string) {
+    const trimmed = query.trim();
+    setSearchQuery(query);
+
+    if (!trimmed) {
+      setIsSearching(false);
+      await loadDirectory(currentDir, device, mode === "preview");
+      return;
+    }
+
+    setIsSearching(true);
+    setStatus(`Searching for "${trimmed}"`);
+
+    if (mode === "preview") {
+      const flattened = Object.values(previewEntries)
+        .flat()
+        .filter(
+          (entry, index, all) =>
+            all.findIndex(
+              (item) => item.relative_path === entry.relative_path,
+            ) === index,
+        )
+        .filter((entry) =>
+          entry.name.toLowerCase().includes(trimmed.toLowerCase()),
+        );
+      setEntries(flattened);
+      setSelectedEntry(null);
+      setSelectedEntryDetails(null);
+      setDrawerView({ kind: "closed" });
+      return;
+    }
+
+    const results = await invoke<ReaderEntry[]>("search_reader_entries", {
+      query: trimmed,
+    });
+    setEntries(results);
+    setSelectedEntry(null);
+    setSelectedEntryDetails(null);
+    setDrawerView({ kind: "closed" });
+  }
+
+  async function openEntry(entry: ReaderEntry) {
+    setSelectedEntry(entry);
+
+    const details: ReaderEntryDetails =
+      mode === "preview"
+        ? {
+            ...entry,
+            item_count: entry.is_dir
+              ? (previewEntries[entry.relative_path] || []).length
+              : null,
+          }
+        : await invoke<ReaderEntryDetails>("get_reader_entry_details", {
+            relativePath: entry.relative_path,
+          });
+
+    setSelectedEntryDetails(details);
+    setDrawerView({ kind: "entry", entry });
   }
 
   async function copyIntoReader(sourcePaths: string[]) {
@@ -420,6 +508,15 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             </div>
             <div className="nav-card nav-card--tree">
               <p className="eyebrow">Library tree</p>
+              <div className="nav-card__search">
+                <input
+                  aria-label="Search reader files"
+                  type="search"
+                  placeholder="Search files and folders"
+                  value={searchQuery}
+                  onChange={(event) => void searchEntries(event.target.value)}
+                />
+              </div>
               <Tree
                 className="reader-tree"
                 treeData={treeNodes}
@@ -437,6 +534,8 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                     return;
                   }
 
+                  setIsSearching(false);
+                  setSearchQuery("");
                   setCurrentDir(key);
                   void loadDirectory(key, device, mode === "preview");
                 }}
@@ -453,13 +552,15 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                       key={part.path || "root"}
                       className="breadcrumb"
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        setIsSearching(false);
+                        setSearchQuery("");
                         void loadDirectory(
                           part.path,
                           device,
                           mode === "preview",
-                        )
-                      }
+                        );
+                      }}
                     >
                       {part.label}
                       {index < breadcrumbs.length - 1 ? <span>/</span> : null}
@@ -482,13 +583,13 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                 <button
                   className="secondary"
                   type="button"
-                  onClick={() =>
-                    setDrawerView(
-                      selectedEntry
-                        ? { kind: "entry", entry: selectedEntry }
-                        : { kind: "device" },
-                    )
-                  }
+                  onClick={() => {
+                    if (selectedEntry) {
+                      setDrawerView({ kind: "entry", entry: selectedEntry });
+                    } else {
+                      setDrawerView({ kind: "device" });
+                    }
+                  }}
                   disabled={!selectedEntry}
                 >
                   Details
@@ -509,9 +610,15 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             </div>
 
             <div className="content-list">
+              {isSearching ? (
+                <div className="content-search-state">
+                  Showing results for <strong>{searchQuery}</strong>
+                </div>
+              ) : null}
               <div className="content-list__header">
                 <span>Item</span>
                 <span>Type</span>
+                <span>Updated</span>
                 <span>Size</span>
               </div>
               {entries.length ? (
@@ -529,10 +636,12 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                       className={`content-row ${selectedEntry?.relative_path === entry.relative_path ? "content-row--selected" : ""}`}
                       type="button"
                       onClick={() => {
-                        setSelectedEntry(entry);
+                        void openEntry(entry);
                       }}
                       onDoubleClick={() => {
                         if (entry.is_dir) {
+                          setIsSearching(false);
+                          setSearchQuery("");
                           void loadDirectory(
                             entry.relative_path,
                             device,
@@ -541,7 +650,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                           return;
                         }
 
-                        setDrawerView({ kind: "entry", entry });
+                        void openEntry(entry);
                       }}
                     >
                       <span className="content-row__name">
@@ -554,6 +663,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                         </span>
                       </span>
                       <span>{entry.is_dir ? "Folder" : kind}</span>
+                      <span>{formatDate(entry.modified_at)}</span>
                       <span>
                         {entry.is_dir ? "--" : formatBytes(entry.size)}
                       </span>
@@ -570,6 +680,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             checkedAt={checkedAt}
             device={device}
             drawerView={drawerView}
+            selectedEntryDetails={selectedEntryDetails}
             onClose={() => setDrawerView({ kind: "closed" })}
             onReveal={() => void revealSelected()}
             onExport={() => void exportSelected()}
@@ -607,6 +718,7 @@ function DisconnectedState({ onRefresh }: { onRefresh: () => void }) {
 function DetailsDrawer({
   device,
   drawerView,
+  selectedEntryDetails,
   checkedAt,
   onClose,
   onReveal,
@@ -614,6 +726,7 @@ function DetailsDrawer({
 }: {
   device: ReaderState;
   drawerView: DrawerView;
+  selectedEntryDetails: ReaderEntryDetails | null;
   checkedAt: string | null;
   onClose: () => void;
   onReveal: () => void;
@@ -665,20 +778,47 @@ function DetailsDrawer({
         </div>
       ) : (
         <div className="details-drawer__body">
-          <DetailItem label="Name" value={drawerView.entry.name} />
-          <DetailItem label="Path" value={drawerView.entry.relative_path} />
+          <DetailItem
+            label="Name"
+            value={selectedEntryDetails?.name || drawerView.entry.name}
+          />
+          <DetailItem
+            label="Path"
+            value={
+              selectedEntryDetails?.relative_path ||
+              drawerView.entry.relative_path
+            }
+          />
           <DetailItem
             label="Type"
-            value={drawerView.entry.is_dir ? "Folder" : "Document"}
+            value={
+              selectedEntryDetails?.is_dir
+                ? "Folder"
+                : selectedEntryDetails?.extension?.toUpperCase() || "Document"
+            }
           />
           <DetailItem
             label="Size"
             value={
-              drawerView.entry.is_dir
+              selectedEntryDetails?.is_dir
                 ? "--"
-                : formatBytes(drawerView.entry.size)
+                : formatBytes(
+                    selectedEntryDetails?.size || drawerView.entry.size,
+                  )
             }
           />
+          <DetailItem
+            label="Updated"
+            value={formatDate(
+              selectedEntryDetails?.modified_at || drawerView.entry.modified_at,
+            )}
+          />
+          {selectedEntryDetails?.is_dir ? (
+            <DetailItem
+              label="Items"
+              value={String(selectedEntryDetails.item_count ?? 0)}
+            />
+          ) : null}
           <div className="details-drawer__actions">
             <button className="secondary" type="button" onClick={onReveal}>
               Reveal in Finder

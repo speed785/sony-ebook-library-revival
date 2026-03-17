@@ -32,3 +32,17 @@ export function breadcrumbParts(
 
   return breadcrumbs;
 }
+
+export function formatDate(timestamp: number | null): string {
+  if (!timestamp) {
+    return "Unavailable";
+  }
+
+  return new Date(timestamp * 1000).toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}

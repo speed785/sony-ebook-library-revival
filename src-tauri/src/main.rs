@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+use std::time::UNIX_EPOCH;
 
 const READER_ROOT: &str = "/Volumes/READER";
 const LAUNCHER_ROOT: &str = "/Volumes/LAUNCHER";
@@ -37,6 +38,20 @@ struct ReaderEntry {
     absolute_path: String,
     is_dir: bool,
     size: u64,
+    extension: Option<String>,
+    modified_at: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct ReaderEntryDetails {
+    name: String,
+    relative_path: String,
+    absolute_path: String,
+    is_dir: bool,
+    size: u64,
+    extension: Option<String>,
+    modified_at: Option<u64>,
+    item_count: Option<usize>,
 }
 
 #[tauri::command]
@@ -97,6 +112,10 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
             absolute_path,
             is_dir: metadata.is_dir(),
             size: metadata.len(),
+            extension: path
+                .extension()
+                .map(|ext| ext.to_string_lossy().to_string()),
+            modified_at: modified_at(&metadata),
         });
     }
 
@@ -107,6 +126,61 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
     });
 
     Ok(entries)
+}
+
+#[tauri::command]
+fn get_reader_entry_details(relative_path: String) -> Result<ReaderEntryDetails, String> {
+    let path = resolve_reader_path(&relative_path)?;
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+
+    let item_count = if metadata.is_dir() {
+        Some(
+            fs::read_dir(&path)
+                .map_err(|error| error.to_string())?
+                .count(),
+        )
+    } else {
+        None
+    };
+
+    Ok(ReaderEntryDetails {
+        name: path
+            .file_name()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Reader".to_string()),
+        relative_path,
+        absolute_path: path.to_string_lossy().to_string(),
+        is_dir: metadata.is_dir(),
+        size: metadata.len(),
+        extension: path
+            .extension()
+            .map(|ext| ext.to_string_lossy().to_string()),
+        modified_at: modified_at(&metadata),
+        item_count,
+    })
+}
+
+#[tauri::command]
+fn search_reader_entries(query: String) -> Result<Vec<ReaderEntry>, String> {
+    let root = Path::new(READER_ROOT);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+
+    let trimmed = query.trim().to_lowercase();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut results = Vec::new();
+    collect_matches(root, &trimmed, &mut results)?;
+
+    results.sort_by(|a, b| {
+        a.relative_path
+            .to_lowercase()
+            .cmp(&b.relative_path.to_lowercase())
+    });
+    Ok(results)
 }
 
 #[tauri::command]
@@ -174,6 +248,50 @@ fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> Result<(), String> {
+    for item in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let entry = item.map_err(|error| error.to_string())?;
+        let entry_path = entry.path();
+        let metadata = entry.metadata().map_err(|error| error.to_string())?;
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        if name.to_lowercase().contains(query) {
+            let relative_path = entry_path
+                .strip_prefix(READER_ROOT)
+                .map_err(|error| error.to_string())?
+                .to_string_lossy()
+                .trim_start_matches('/')
+                .to_string();
+
+            results.push(ReaderEntry {
+                name,
+                relative_path,
+                absolute_path: entry_path.to_string_lossy().to_string(),
+                is_dir: metadata.is_dir(),
+                size: metadata.len(),
+                extension: entry_path
+                    .extension()
+                    .map(|ext| ext.to_string_lossy().to_string()),
+                modified_at: modified_at(&metadata),
+            });
+        }
+
+        if metadata.is_dir() {
+            collect_matches(&entry_path, query, results)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn modified_at(metadata: &fs::Metadata) -> Option<u64> {
+    metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs())
+}
+
 fn parse_diskutil_info(path: &str) -> DiskInfo {
     let output = Command::new("diskutil").args(["info", path]).output();
 
@@ -235,6 +353,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_reader_state,
             list_reader_entries,
+            get_reader_entry_details,
+            search_reader_entries,
             copy_files_to_reader,
             export_reader_file,
             reveal_in_finder

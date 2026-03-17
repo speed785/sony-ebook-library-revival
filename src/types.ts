@@ -19,6 +19,12 @@ export type ReaderEntry = {
   absolute_path: string;
   is_dir: boolean;
   size: number;
+  extension: string | null;
+  modified_at: number | null;
+};
+
+export type ReaderEntryDetails = ReaderEntry & {
+  item_count: number | null;
 };
 
 export type DrawerView =
