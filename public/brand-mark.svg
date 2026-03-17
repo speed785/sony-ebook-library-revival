@@ -1,32 +1,118 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Sony eBook Library Revival icon</title>
-  <desc id="desc">A modern reading-focused app icon with a refined reader silhouette and open page mark.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="icon-title icon-desc">
+  <title id="icon-title">Sony eBook Library Revival</title>
+  <desc id="icon-desc">App icon: a Sony e-reader device rendered in a cool steel-blue aero style with a crisp e-paper screen.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fff8ef" />
-      <stop offset="55%" stop-color="#ead7bf" />
-      <stop offset="100%" stop-color="#b98e65" />
+    <!-- App tile background: cool blue-slate gradient -->
+    <linearGradient id="tile-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#1e3a5f" />
+      <stop offset="55%"  stop-color="#162d4d" />
+      <stop offset="100%" stop-color="#0e1f38" />
     </linearGradient>
-    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#6f4c34" />
-      <stop offset="100%" stop-color="#2f2017" />
+    <!-- Subtle top-left radial highlight (glass refraction) -->
+    <radialGradient id="tile-gloss" cx="28%" cy="22%" r="52%">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.13" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+    <!-- Reader body: dark steel -->
+    <linearGradient id="body-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2a3f5c" />
+      <stop offset="100%" stop-color="#141e2e" />
     </linearGradient>
-    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fbfbf5" />
-      <stop offset="100%" stop-color="#e8e7dc" />
+    <!-- e-ink screen: cool off-white paper -->
+    <linearGradient id="screen-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#f4f6f9" />
+      <stop offset="100%" stop-color="#e2e7ef" />
+    </linearGradient>
+    <!-- Open book pages on screen -->
+    <linearGradient id="page-left" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.92" />
+      <stop offset="100%" stop-color="#dce3ed" stop-opacity="0.80" />
+    </linearGradient>
+    <linearGradient id="page-right" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#dce3ed" stop-opacity="0.80" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.88" />
+    </linearGradient>
+    <!-- Chrome accent glow under the device -->
+    <radialGradient id="accent-glow" cx="50%" cy="100%" r="50%">
+      <stop offset="0%"   stop-color="#2477e8" stop-opacity="0.38" />
+      <stop offset="100%" stop-color="#2477e8" stop-opacity="0" />
+    </radialGradient>
+    <!-- Inner border refraction (1 px highlight on top edge of tile) -->
+    <linearGradient id="tile-border" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.18" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="120" fill="url(#bg)" />
-  <rect x="102" y="74" width="308" height="364" rx="52" fill="url(#body)" />
-  <rect x="128" y="102" width="256" height="294" rx="22" fill="url(#screen)" />
-  <path d="M182 168c23-12 49-18 78-18 17 0 34 2 50 7v148c-15-7-31-10-50-10-30 0-56 8-78 21V168Z" fill="#f8f7ee" />
-  <path d="M330 168c-23-12-49-18-78-18-17 0-34 2-50 7v148c15-7 31-10 50-10 30 0 56 8 78 21V168Z" fill="#fffdf6" opacity="0.95" />
-  <path d="M256 154v164" stroke="#a98e73" stroke-width="7" stroke-linecap="round" />
-  <path d="M186 198c17-7 35-10 55-10" stroke="#8e7b68" stroke-width="8" stroke-linecap="round" opacity="0.62" />
-  <path d="M186 230c17-7 35-10 55-10" stroke="#8e7b68" stroke-width="8" stroke-linecap="round" opacity="0.42" />
-  <path d="M272 188c18 0 38 3 54 10" stroke="#8e7b68" stroke-width="8" stroke-linecap="round" opacity="0.62" />
-  <path d="M272 220c18 0 38 3 54 10" stroke="#8e7b68" stroke-width="8" stroke-linecap="round" opacity="0.42" />
-  <rect x="178" y="338" width="156" height="14" rx="7" fill="#ddd8c8" />
-  <circle cx="256" cy="415" r="11" fill="#dbc4a8" />
-  <path d="M128 102h256v40c-56 12-130 18-256 0v-40Z" fill="#ffffff" opacity="0.14" />
+
+  <!-- ── Tile background ───────────────────────────────────────── -->
+  <rect width="512" height="512" rx="118" fill="url(#tile-bg)" />
+  <!-- glass refraction gloss -->
+  <rect width="512" height="512" rx="118" fill="url(#tile-gloss)" />
+  <!-- 1 px inner border highlight -->
+  <rect x="1.5" y="1.5" width="509" height="509" rx="117" fill="none"
+        stroke="url(#tile-border)" stroke-width="3" />
+
+  <!-- ── Ambient chrome accent glow (bottom) ──────────────────── -->
+  <ellipse cx="256" cy="440" rx="180" ry="60" fill="url(#accent-glow)" />
+
+  <!-- ── Reader device body ───────────────────────────────────── -->
+  <!-- Shadow -->
+  <rect x="112" y="90" width="288" height="348" rx="38"
+        fill="#000000" opacity="0.28" transform="translate(0,8)" />
+  <!-- Body -->
+  <rect x="112" y="90" width="288" height="348" rx="38"
+        fill="url(#body-grad)" />
+  <!-- Body top-edge gloss -->
+  <rect x="112" y="90" width="288" height="60" rx="38"
+        fill="#ffffff" opacity="0.07" />
+
+  <!-- ── e-ink screen bezel inset ─────────────────────────────── -->
+  <rect x="140" y="118" width="232" height="264" rx="18"
+        fill="url(#screen-grad)" />
+  <!-- Subtle glare streak across screen top-left -->
+  <path d="M148 126 Q200 122 300 134" stroke="#ffffff" stroke-width="6"
+        stroke-linecap="round" opacity="0.22" />
+
+  <!-- ── Open book on screen ──────────────────────────────────── -->
+  <!-- Left page -->
+  <path d="M172 154 C186 146 212 142 240 142 L240 282
+           C212 282 186 286 172 294 Z"
+        fill="url(#page-left)" />
+  <!-- Right page -->
+  <path d="M340 154 C326 146 300 142 272 142 L272 282
+           C300 282 326 286 340 294 Z"
+        fill="url(#page-right)" />
+  <!-- Spine line -->
+  <line x1="256" y1="140" x2="256" y2="284"
+        stroke="#2477e8" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+
+  <!-- Left page text lines -->
+  <line x1="184" y1="178" x2="236" y2="176" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.55" />
+  <line x1="184" y1="198" x2="236" y2="196" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.38" />
+  <line x1="184" y1="218" x2="232" y2="216" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.28" />
+  <line x1="184" y1="238" x2="228" y2="236" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.22" />
+
+  <!-- Right page text lines -->
+  <line x1="276" y1="178" x2="328" y2="176" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.55" />
+  <line x1="276" y1="198" x2="328" y2="196" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.38" />
+  <line x1="276" y1="218" x2="324" y2="216" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.28" />
+  <line x1="276" y1="238" x2="320" y2="236" stroke="#8fa0b8" stroke-width="6" stroke-linecap="round" opacity="0.22" />
+
+  <!-- ── Page-turn bottom shadow on screen ────────────────────── -->
+  <rect x="140" y="358" width="232" height="24" rx="0"
+        fill="#0e1f38" opacity="0.18" />
+
+  <!-- ── Status bar below screen ──────────────────────────────── -->
+  <!-- Progress bar track -->
+  <rect x="166" y="344" width="180" height="8" rx="4"
+        fill="#0e1f38" opacity="0.28" />
+  <!-- Progress bar fill — chrome blue -->
+  <rect x="166" y="344" width="90" height="8" rx="4"
+        fill="#2477e8" opacity="0.72" />
+
+  <!-- ── Home button ───────────────────────────────────────────── -->
+  <circle cx="256" cy="406" r="16"
+          fill="none" stroke="#2477e8" stroke-width="3" opacity="0.55" />
+  <circle cx="256" cy="406" r="6" fill="#2477e8" opacity="0.45" />
+
 </svg>
