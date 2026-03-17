@@ -15,6 +15,8 @@ A clean-room remake of the classic Sony Reader setup experience, rebuilt as:
 
 Website: `https://speed785.github.io/sony-ebook-library-revival/`
 
+Releases: `https://github.com/speed785/sony-ebook-library-revival/releases`
+
 The goal is not to run Sony's old binary. The goal is to preserve the era and spirit of the original app while rebuilding it as a professional modern tool with an e-ink and aero-inspired visual direction.
 
 ## What it does
@@ -46,6 +48,12 @@ The desktop app has real device access. The website is intentionally information
 - Desktop app icon source: `src-tauri/icons/icon.png`
 - Desktop app bundle icon set: `src-tauri/icons/icon.icns`
 - In-app brand mark: reused in the hero header so the app and docs share the same identity
+
+Regenerate the macOS icon set with:
+
+```bash
+npm run icons:mac
+```
 
 ## Dependency note
 
@@ -107,7 +115,8 @@ Recommended secure repo settings:
 This repository already includes:
 
 - CI workflow for lint, format, build, `cargo check`, and `clippy`
-- GitHub Pages deployment workflow
+- website deployment workflow
+- release workflow that publishes the macOS DMG for version tags like `v0.1.0`
 - CodeQL workflow
 - Dependabot config
 - security policy and issue templates
