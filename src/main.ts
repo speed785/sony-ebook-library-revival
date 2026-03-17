@@ -52,12 +52,16 @@ const regions = {
 
 const isDesktop = "__TAURI_INTERNALS__" in window;
 const assetBase = import.meta.env.BASE_URL;
+const searchParams = new URLSearchParams(window.location.search);
+const desktopPreviewMode = searchParams.get("preview") === "desktop";
 
 function assetUrl(path: string): string {
   return `${assetBase}${path}`;
 }
 
-document.body.classList.add(isDesktop ? "desktop-app" : "web-app");
+document.body.classList.add(
+  isDesktop || desktopPreviewMode ? "desktop-app" : "web-app",
+);
 
 const uiState: UiState = {
   language: localStorage.getItem("sony-revival-language") || "en",
@@ -104,8 +108,12 @@ if (!app) {
   throw new Error("#app element is missing");
 }
 
-if (!isDesktop) {
+if (!isDesktop && !desktopPreviewMode) {
   renderWebLanding(app);
+}
+
+if (desktopPreviewMode) {
+  renderDesktopPreview(app);
 }
 
 if (isDesktop) {
@@ -372,8 +380,8 @@ function renderWebLanding(root: HTMLDivElement): void {
           </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
-            A focused macOS utility for classic Sony Readers. It brings device browsing, file transfer, and a cleaner
-            workflow back to hardware that outlived its original software.
+            A modern macOS app for classic Sony Readers. Clean transfers, direct file access, and a quieter workflow for
+            hardware that still deserves good software.
           </p>
           <div class="site-meta">
             <span>macOS desktop app</span>
@@ -386,31 +394,11 @@ function renderWebLanding(root: HTMLDivElement): void {
             <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest" target="_blank" rel="noreferrer">Release notes</a>
           </div>
           <p class="site-note">
-            Made for people who still use dedicated reading hardware and want software that respects the device instead of forcing a storefront workflow.
+            Built for people who still read on dedicated devices and want software that respects the hardware instead of wrapping it in dead services.
           </p>
         </div>
-        <div class="site-preview" aria-label="Sony eBook Library Revival preview">
-          <div class="site-preview__copy">
-            <p class="eyebrow">Purpose</p>
-            <h2>Made for readers that still deserve better software.</h2>
-            <p>
-              Sony's original launcher belongs to another era. This project replaces that dead-end setup flow with a usable,
-              maintained Mac app built around what still matters: mounted storage, readable files, and direct transfer.
-            </p>
-            <ul class="site-preview__list">
-              <li>Detect connected Sony Reader volumes</li>
-              <li>Browse files already on the device</li>
-              <li>Import books from Finder and export them back out</li>
-            </ul>
-          </div>
-          <div class="site-preview__hardware">
-            <div class="site-preview__device">
-              <div class="site-preview__screen">
-                <div class="site-preview__page"></div>
-              </div>
-            </div>
-            <div class="site-preview__caption">Built for the Sony PRS generation</div>
-          </div>
+        <div class="site-shot site-shot--hero">
+          <img src="${assetUrl("screenshots/app-overview.png")}" alt="Sony eBook Library Revival desktop app overview" />
         </div>
       </section>
 
@@ -422,10 +410,23 @@ function renderWebLanding(root: HTMLDivElement): void {
           </div>
           <div>
             <p>
-              This project exists to keep older Sony readers practical instead of nostalgic. It respects the hardware,
-              drops the broken store-era assumptions, and focuses on reliable local book management.
+              This project keeps older Sony readers practical instead of nostalgic. It drops the storefront era, keeps the useful parts,
+              and makes local reading workflows feel current again.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section class="site-gallery">
+        <figure class="site-shot site-shot--wide">
+          <img src="${assetUrl("screenshots/app-library.png")}" alt="Library and transfer view inside the Sony eBook Library Revival app" />
+        </figure>
+        <div class="site-gallery__copy">
+          <p class="eyebrow">Reading workflow</p>
+          <h2>Closer to a reading tool than a device utility.</h2>
+          <p>
+            The app is designed to feel calm, legible, and direct. Browse the reader, move books in or out, and keep the interface focused on the collection instead of the software.
+          </p>
         </div>
       </section>
 
@@ -433,19 +434,18 @@ function renderWebLanding(root: HTMLDivElement): void {
         <article class="site-row">
           <div class="site-row__label">Desktop app</div>
           <div class="site-row__body">
-            <h3>The app does the actual work.</h3>
+            <h3>Built for direct device access.</h3>
             <p>
-              It detects mounted readers, shows storage details, browses on-device files, supports Finder drag-in import,
-              and exports selected files back to your Mac.
+              See the mounted reader clearly, inspect what is already on it, move books from Finder, and keep everything in a format that still makes sense on older Sony hardware.
             </p>
           </div>
         </article>
         <article class="site-row">
           <div class="site-row__label">Workflow</div>
           <div class="site-row__body">
-            <h3>Built around direct transfer, not storefronts.</h3>
+            <h3>Local-first by design.</h3>
             <p>
-              Connect the reader, inspect its contents, move books in or out, and use Calibre only when conversion or metadata cleanup makes sense.
+              Connect the reader, review its contents, transfer what you need, and use Calibre only when conversion or metadata cleanup actually helps.
             </p>
           </div>
         </article>
@@ -463,7 +463,7 @@ function renderWebLanding(root: HTMLDivElement): void {
           <div class="site-row__body">
             <h3>Public repo, releases, and ongoing iteration.</h3>
             <p>
-              The website explains the project clearly, the repository documents the work, and releases provide a direct Mac download.
+              The website introduces the project, the repository documents the work, and releases provide a direct Mac download without extra ceremony.
             </p>
             <div class="site-inline-links">
               <a href="https://speed785.github.io/sony-ebook-library-revival/">Website</a>
@@ -493,6 +493,107 @@ function renderWebLanding(root: HTMLDivElement): void {
           <a href="https://github.com/speed785/sony-ebook-library-revival/releases/latest">Latest release notes</a>
         </div>
       </footer>
+    </main>
+  `;
+}
+
+function renderDesktopPreview(root: HTMLDivElement): void {
+  root.innerHTML = `
+    <main class="shell preview-shell">
+      <section class="window" aria-label="Sony eBook Library Revival preview mode">
+        <header class="titlebar">
+          <div class="titlebar__dots" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div>
+            <p class="titlebar__eyebrow">Preview mode</p>
+            <p class="titlebar__title">Setup eBook Library Revival</p>
+          </div>
+        </header>
+        <div class="frame">
+          <aside class="hero">
+            <div class="hero__badge-wrap">
+              <img class="hero__brand" src="${assetUrl("brand-mark.svg")}" alt="Sony eBook Library Revival icon" />
+              <div class="hero__badge">Desktop Reader Manager</div>
+            </div>
+            <h1>Sony Reader, remade for current macOS.</h1>
+            <p>A calm desktop utility for browsing a mounted reader, reviewing files, and moving books with less friction.</p>
+            <ul class="hero__facts">
+              <li>Mounted Sony Reader detected</li>
+              <li>Direct file browsing and export</li>
+              <li>Finder-based book transfer</li>
+            </ul>
+          </aside>
+          <section class="panel">
+            <div class="panel__topbar">
+              <div>
+                <p class="eyebrow">Status</p>
+                <div class="status-pill">Detected Sony Reader PRS-300</div>
+              </div>
+              <div class="actions-inline">
+                <button class="secondary" type="button">Refresh device</button>
+                <button class="secondary" type="button">Launcher info</button>
+              </div>
+            </div>
+            <section class="card stack-gap">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Connection</p>
+                  <h2>Reader snapshot</h2>
+                </div>
+                <div class="chip-row">
+                  <span class="chip">Desktop app</span>
+                  <span class="chip">Live device mode</span>
+                </div>
+              </div>
+              <div class="device-grid preview-device-grid">
+                <article class="device-tile"><span class="device-tile__label">Reader</span><strong>Connected</strong></article>
+                <article class="device-tile"><span class="device-tile__label">Launcher volume</span><strong>Mounted</strong></article>
+                <article class="device-tile"><span class="device-tile__label">Model</span><strong>PRS-300</strong></article>
+                <article class="device-tile"><span class="device-tile__label">Capacity</span><strong>465 MB</strong></article>
+                <article class="device-tile"><span class="device-tile__label">Free space</span><strong>445 MB</strong></article>
+                <article class="device-tile"><span class="device-tile__label">Locale</span><strong>English / United States</strong></article>
+              </div>
+            </section>
+            <section class="card stack-gap card--workspace">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Library workspace</p>
+                  <h2>Browse and move files</h2>
+                </div>
+                <div class="actions-inline">
+                  <button class="secondary" type="button">Up one level</button>
+                  <button class="secondary" type="button">Reload files</button>
+                </div>
+              </div>
+              <div class="toolbar">
+                <div class="path-pill">/Documents</div>
+                <div class="toolbar__text">Drag files in from Finder. Export selected items back out to your Mac.</div>
+              </div>
+              <div class="workspace-grid">
+                <section class="dropzone">
+                  <div>
+                    <p class="dropzone__title">Import to Reader</p>
+                    <p class="dropzone__body">Drag EPUB or PDF files into the app to copy them to the selected folder on the device.</p>
+                  </div>
+                  <span class="primary button-like">Choose files</span>
+                </section>
+                <section class="filepane">
+                  <div class="filepane__header"><span>Name</span><span>Size</span></div>
+                  <div class="file-list">
+                    <button class="file-row"><span class="file-row__main"><span class="file-row__icon">Folder</span><span class="file-row__meta"><strong>Collections</strong><span>Nested folders</span></span></span><span class="file-row__size">--</span></button>
+                    <button class="file-row file-row--selected"><span class="file-row__main"><span class="file-row__icon">EPUB</span><span class="file-row__meta"><strong>The Left Hand of Darkness</strong><span>Ready to export</span></span></span><span class="file-row__size">1.4 MB</span></button>
+                    <button class="file-row"><span class="file-row__main"><span class="file-row__icon">EPUB</span><span class="file-row__meta"><strong>Piranesi</strong><span>Book file</span></span></span><span class="file-row__size">822 KB</span></button>
+                    <button class="file-row"><span class="file-row__main"><span class="file-row__icon">PDF</span><span class="file-row__meta"><strong>Essays</strong><span>Document</span></span></span><span class="file-row__size">2.8 MB</span></button>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
     </main>
   `;
 }
@@ -676,14 +777,30 @@ function render(): void {
             uiState.selectedFile?.relative_path === entry.relative_path
               ? " file-row--selected"
               : "";
-          const icon = entry.is_dir ? "Folder" : "File";
+          const typeLabel = entry.is_dir
+            ? "Folder"
+            : entry.name.toLowerCase().endsWith(".pdf")
+              ? "PDF"
+              : entry.name.toLowerCase().endsWith(".epub")
+                ? "EPUB"
+                : "File";
+          const sublabel = entry.is_dir
+            ? "Open folder"
+            : entry.name.toLowerCase().endsWith(".pdf")
+              ? "Portable document"
+              : entry.name.toLowerCase().endsWith(".epub")
+                ? "Digital book"
+                : "Reader file";
           return `
             <button class="file-row${selected}" data-path="${entry.relative_path}" data-dir="${entry.is_dir}">
-              <span>
-                <strong>${icon}</strong>
-                <span>${entry.name}</span>
+              <span class="file-row__main">
+                <span class="file-row__icon">${typeLabel}</span>
+                <span class="file-row__meta">
+                  <strong>${entry.name}</strong>
+                  <span>${sublabel}</span>
+                </span>
               </span>
-              <span>${entry.is_dir ? "--" : formatBytes(entry.size)}</span>
+              <span class="file-row__size">${entry.is_dir ? "--" : formatBytes(entry.size)}</span>
             </button>
           `;
         })

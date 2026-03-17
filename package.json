@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "screenshots": "node scripts/capture-app-screenshots.mjs",
     "icons:mac": "bash scripts/generate-macos-icons.sh",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -17,6 +18,7 @@
     "check": "npm run lint && npm run format:check && npm run build && cargo fmt --manifest-path src-tauri/Cargo.toml --all --check && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@tauri-apps/api": "^2.8.0",
     "@tauri-apps/plugin-dialog": "^2.4.2"
   },
@@ -26,6 +28,7 @@
     "@typescript-eslint/eslint-plugin": "^8.44.1",
     "@typescript-eslint/parser": "^8.44.1",
     "eslint": "^9.35.0",
+    "playwright": "^1.58.2",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.5"
