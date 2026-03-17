@@ -135,7 +135,7 @@ export function DetailsDrawer({
           <div className="details-drawer__actions">
             <button className="secondary" type="button" onClick={onReveal}>
               <ExternalLink size={16} />
-              Reveal in Finder
+              Show in file manager
             </button>
             {!drawerView.entry.is_dir ? (
               <button className="primary" type="button" onClick={onExport}>

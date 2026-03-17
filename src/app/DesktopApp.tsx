@@ -46,8 +46,8 @@ const previewDevice: ReaderState = {
   desktop: true,
   reader_available: true,
   launcher_available: true,
-  reader_path: "/Volumes/READER",
-  launcher_path: "/Volumes/LAUNCHER",
+  reader_path: "/media/READER",
+  launcher_path: "/media/LAUNCHER",
   model: "PRS-300",
   total_space: "465.0 MB",
   free_space: "445.1 MB",
@@ -66,7 +66,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Digital Editions",
       relative_path: "Digital Editions",
-      absolute_path: "/Volumes/READER/Digital Editions",
+      absolute_path: "/media/READER/Digital Editions",
       is_dir: true,
       size: 0,
       extension: null,
@@ -75,7 +75,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Documents",
       relative_path: "Documents",
-      absolute_path: "/Volumes/READER/Documents",
+      absolute_path: "/media/READER/Documents",
       is_dir: true,
       size: 0,
       extension: null,
@@ -84,7 +84,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "database",
       relative_path: "database",
-      absolute_path: "/Volumes/READER/database",
+      absolute_path: "/media/READER/database",
       is_dir: true,
       size: 0,
       extension: null,
@@ -95,7 +95,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "media",
       relative_path: "database/media",
-      absolute_path: "/Volumes/READER/database/media",
+      absolute_path: "/media/READER/database/media",
       is_dir: true,
       size: 0,
       extension: null,
@@ -106,7 +106,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "books",
       relative_path: "database/media/books",
-      absolute_path: "/Volumes/READER/database/media/books",
+      absolute_path: "/media/READER/database/media/books",
       is_dir: true,
       size: 0,
       extension: null,
@@ -117,7 +117,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Mollick, Ethan",
       relative_path: "database/media/books/Mollick, Ethan",
-      absolute_path: "/Volumes/READER/database/media/books/Mollick, Ethan",
+      absolute_path: "/media/READER/database/media/books/Mollick, Ethan",
       is_dir: true,
       size: 0,
       extension: null,
@@ -126,8 +126,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Eat, Pray, Love.epub",
       relative_path: "database/media/books/Eat,_Pray,_Love.epub",
-      absolute_path:
-        "/Volumes/READER/database/media/books/Eat,_Pray,_Love.epub",
+      absolute_path: "/media/READER/database/media/books/Eat,_Pray,_Love.epub",
       is_dir: false,
       size: 1800123,
       extension: "epub",
@@ -136,8 +135,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Harvests of Joy.epub",
       relative_path: "database/media/books/Harvests of Joy.epub",
-      absolute_path:
-        "/Volumes/READER/database/media/books/Harvests of Joy.epub",
+      absolute_path: "/media/READER/database/media/books/Harvests of Joy.epub",
       is_dir: false,
       size: 1521420,
       extension: "epub",
@@ -147,7 +145,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       name: "The House of Mondavi.epub",
       relative_path: "database/media/books/The House of Mondavi.epub",
       absolute_path:
-        "/Volumes/READER/database/media/books/The House of Mondavi.epub",
+        "/media/READER/database/media/books/The House of Mondavi.epub",
       is_dir: false,
       size: 1622340,
       extension: "epub",
@@ -160,7 +158,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       relative_path:
         "database/media/books/Mollick, Ethan/Co-Intelligence - Mollick, Ethan_16.epub",
       absolute_path:
-        "/Volumes/READER/database/media/books/Mollick, Ethan/Co-Intelligence - Mollick, Ethan_16.epub",
+        "/media/READER/database/media/books/Mollick, Ethan/Co-Intelligence - Mollick, Ethan_16.epub",
       is_dir: false,
       size: 2388400,
       extension: "epub",
@@ -171,7 +169,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Collections",
       relative_path: "Documents/Collections",
-      absolute_path: "/Volumes/READER/Documents/Collections",
+      absolute_path: "/media/READER/Documents/Collections",
       is_dir: true,
       size: 0,
       extension: null,
@@ -180,7 +178,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "The Left Hand of Darkness.epub",
       relative_path: "Documents/The Left Hand of Darkness.epub",
-      absolute_path: "/Volumes/READER/Documents/The Left Hand of Darkness.epub",
+      absolute_path: "/media/READER/Documents/The Left Hand of Darkness.epub",
       is_dir: false,
       size: 1468006,
       extension: "epub",
@@ -189,7 +187,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Piranesi.epub",
       relative_path: "Documents/Piranesi.epub",
-      absolute_path: "/Volumes/READER/Documents/Piranesi.epub",
+      absolute_path: "/media/READER/Documents/Piranesi.epub",
       is_dir: false,
       size: 841212,
       extension: "epub",
@@ -198,7 +196,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Essays.pdf",
       relative_path: "Documents/Essays.pdf",
-      absolute_path: "/Volumes/READER/Documents/Essays.pdf",
+      absolute_path: "/media/READER/Documents/Essays.pdf",
       is_dir: false,
       size: 2860081,
       extension: "pdf",
@@ -209,7 +207,7 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     {
       name: "Fiction",
       relative_path: "Documents/Collections/Fiction",
-      absolute_path: "/Volumes/READER/Documents/Collections/Fiction",
+      absolute_path: "/media/READER/Documents/Collections/Fiction",
       is_dir: true,
       size: 0,
       extension: null,
@@ -570,10 +568,10 @@ export function DesktopApp({ mode }: DesktopAppProps) {
 
   async function revealSelected() {
     if (!selectedEntry || !canUseNativeBridge) return;
-    await invoke("reveal_in_finder", {
+    await invoke("reveal_in_file_manager", {
       absolutePath: selectedEntry.absolute_path,
     });
-    setStatus(`Revealed ${selectedEntry.name} in Finder`);
+    setStatus(`Revealed ${selectedEntry.name} in file manager`);
   }
 
   async function dragSelectedToFinder() {

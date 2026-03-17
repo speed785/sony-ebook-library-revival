@@ -134,7 +134,7 @@ export const ContentList = memo(function ContentList({
             disabled={!selectedPaths.length || !canUseNativeBridge}
           >
             <ExternalLink size={15} />
-            Drag to Finder
+            Drag to desktop
           </button>
           <button
             className="secondary"

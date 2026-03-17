@@ -12,7 +12,9 @@ export function Website() {
               src={assetUrl("brand-mark.svg")}
               alt="Sony eBook Library Revival"
             />
-            <span className="hero__badge">macOS · Free · Open source</span>
+            <span className="hero__badge">
+              macOS · Windows · Linux · Free · Open source
+            </span>
           </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
@@ -21,17 +23,17 @@ export function Website() {
             abandoned store-era software.
           </p>
           <div className="site-meta">
-            <span>macOS 13+</span>
+            <span>macOS · Windows · Linux</span>
             <span>PRS-300 · PRS-505 · PRS-600 · more</span>
             <span>EPUB · PDF · LRF</span>
           </div>
           <div className="site-actions">
             <a
               className="primary site-link"
-              href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg"
+              href="https://github.com/speed785/sony-ebook-library-revival/releases/latest"
             >
               <Download size={17} />
-              Download for Mac
+              Download
             </a>
             <a
               className="secondary site-link"
@@ -155,18 +157,41 @@ export function Website() {
         <p className="eyebrow">Download</p>
         <div className="site-download-band__content">
           <div>
-            <h2>Get the latest macOS release.</h2>
+            <h2>Available for macOS, Windows, and Linux.</h2>
             <p>
-              Download the DMG, open it, drag the app to Applications, connect
-              your Sony Reader over USB, and you're in.
+              Download the latest release for your platform, connect your Sony
+              Reader over USB, and you're in.
             </p>
+            <div className="site-actions" style={{ marginTop: "16px" }}>
+              <a
+                className="secondary site-link"
+                href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg"
+              >
+                <Download size={16} />
+                macOS (.dmg)
+              </a>
+              <a
+                className="secondary site-link"
+                href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-Windows.exe"
+              >
+                <Download size={16} />
+                Windows (.exe)
+              </a>
+              <a
+                className="secondary site-link"
+                href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-Linux.AppImage"
+              >
+                <Download size={16} />
+                Linux (.AppImage)
+              </a>
+            </div>
           </div>
           <a
             className="primary site-link site-link--large"
-            href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg"
+            href="https://github.com/speed785/sony-ebook-library-revival/releases/latest"
           >
             <Download size={17} />
-            Download for Mac
+            All releases
           </a>
         </div>
       </section>

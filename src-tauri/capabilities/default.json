@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default capability for the Sony eBook Library Revival app",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "drag:default"]
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "drag:default",
+    "opener:default"
+  ]
 }

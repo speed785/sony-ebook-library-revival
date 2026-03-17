@@ -12,7 +12,7 @@ export function DisconnectedState({ onRefresh }: { onRefresh: () => void }) {
         <p>
           Plug the device in over USB to browse its library, move books, and see
           storage details. Live information only appears when a reader is
-          mounted on your Mac.
+          mounted on this computer.
         </p>
         <button className="primary" type="button" onClick={onRefresh}>
           Refresh device
