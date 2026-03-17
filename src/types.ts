@@ -31,6 +31,11 @@ export type ReaderEntryDetails = ReaderEntry & {
   item_count: number | null;
 };
 
+export type ReaderPreview = {
+  mime_type: string;
+  data_url: string;
+};
+
 export type DrawerView =
   | { kind: "closed" }
   | { kind: "device" }

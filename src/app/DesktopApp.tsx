@@ -1,21 +1,40 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  File,
+  FileArchive,
+  FileText,
+  Folder,
+  FolderOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  Search,
+} from "lucide-react";
 import Tree from "rc-tree";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { startDrag } from "@crabnebula/tauri-plugin-drag";
 
 import type {
   AppMode,
   DrawerView,
   ReaderEntry,
   ReaderEntryDetails,
+  ReaderPreview,
   ReaderState,
 } from "../types";
-import { breadcrumbParts, formatBytes, formatDate } from "../utils";
+import { assetUrl, breadcrumbParts, formatBytes, formatDate } from "../utils";
 
 type TreeNode = {
   key: string;
-  title: string;
+  title: ReactNode;
   isLeaf?: boolean;
   children?: TreeNode[];
 };
@@ -73,6 +92,82 @@ const previewEntries: Record<string, ReaderEntry[]> = {
       modified_at: null,
     },
   ],
+  database: [
+    {
+      name: "media",
+      relative_path: "database/media",
+      absolute_path: "/Volumes/READER/database/media",
+      is_dir: true,
+      size: 0,
+      extension: null,
+      modified_at: null,
+    },
+  ],
+  "database/media": [
+    {
+      name: "books",
+      relative_path: "database/media/books",
+      absolute_path: "/Volumes/READER/database/media/books",
+      is_dir: true,
+      size: 0,
+      extension: null,
+      modified_at: null,
+    },
+  ],
+  "database/media/books": [
+    {
+      name: "Mollick, Ethan",
+      relative_path: "database/media/books/Mollick, Ethan",
+      absolute_path: "/Volumes/READER/database/media/books/Mollick, Ethan",
+      is_dir: true,
+      size: 0,
+      extension: null,
+      modified_at: null,
+    },
+    {
+      name: "Eat, Pray, Love.epub",
+      relative_path: "database/media/books/Eat,_Pray,_Love.epub",
+      absolute_path:
+        "/Volumes/READER/database/media/books/Eat,_Pray,_Love.epub",
+      is_dir: false,
+      size: 1800123,
+      extension: "epub",
+      modified_at: 1709182800,
+    },
+    {
+      name: "Harvests of Joy.epub",
+      relative_path: "database/media/books/Harvests of Joy.epub",
+      absolute_path:
+        "/Volumes/READER/database/media/books/Harvests of Joy.epub",
+      is_dir: false,
+      size: 1521420,
+      extension: "epub",
+      modified_at: 1709265600,
+    },
+    {
+      name: "The House of Mondavi.epub",
+      relative_path: "database/media/books/The House of Mondavi.epub",
+      absolute_path:
+        "/Volumes/READER/database/media/books/The House of Mondavi.epub",
+      is_dir: false,
+      size: 1622340,
+      extension: "epub",
+      modified_at: 1709352000,
+    },
+  ],
+  "database/media/books/Mollick, Ethan": [
+    {
+      name: "Co-Intelligence - Mollick, Ethan_16.epub",
+      relative_path:
+        "database/media/books/Mollick, Ethan/Co-Intelligence - Mollick, Ethan_16.epub",
+      absolute_path:
+        "/Volumes/READER/database/media/books/Mollick, Ethan/Co-Intelligence - Mollick, Ethan_16.epub",
+      is_dir: false,
+      size: 2388400,
+      extension: "epub",
+      modified_at: 1711195200,
+    },
+  ],
   Documents: [
     {
       name: "Collections",
@@ -123,7 +218,6 @@ const previewEntries: Record<string, ReaderEntry[]> = {
     },
   ],
   "Digital Editions": [],
-  database: [],
 };
 
 export function DesktopApp({ mode }: DesktopAppProps) {
@@ -152,13 +246,19 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   const [selectedEntry, setSelectedEntry] = useState<ReaderEntry | null>(null);
   const [selectedEntryDetails, setSelectedEntryDetails] =
     useState<ReaderEntryDetails | null>(null);
+  const [selectedPreview, setSelectedPreview] = useState<ReaderPreview | null>(
+    null,
+  );
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [drawerView, setDrawerView] = useState<DrawerView>({ kind: "closed" });
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const [sortKey, setSortKey] = useState<"name" | "type" | "date" | "size">(
     "name",
   );
@@ -183,15 +283,18 @@ export function DesktopApp({ mode }: DesktopAppProps) {
       .onDragDropEvent(async (event) => {
         if (event.payload.type === "over") {
           document.body.classList.add("drag-target-active");
+          setDragActive(true);
           return;
         }
 
         if (event.payload.type === "leave") {
           document.body.classList.remove("drag-target-active");
+          setDragActive(false);
           return;
         }
 
         document.body.classList.remove("drag-target-active");
+        setDragActive(false);
         const paths = event.payload.paths;
         if (paths.length === 0 || !device.reader_available) {
           return;
@@ -205,6 +308,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
 
     return () => {
       document.body.classList.remove("drag-target-active");
+      setDragActive(false);
       unlisten?.();
     };
   }, [canUseNativeBridge, currentDir, device.reader_available, mode]);
@@ -218,7 +322,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     if (mode === "preview") {
       setDevice(previewDevice);
       setStatus("Reader connected");
-      await loadDirectory("Documents", previewDevice, true);
+      await loadDirectory("database/media/books", previewDevice, true);
       return;
     }
 
@@ -239,6 +343,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         setTreeNodes([]);
         setSelectedEntry(null);
         setSelectedEntryDetails(null);
+        setSelectedPreview(null);
         setSelectedPaths([]);
         setDrawerView({ kind: "closed" });
         return;
@@ -276,11 +381,11 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setEntries(nextEntries);
     setSelectedEntry(null);
     setSelectedEntryDetails(null);
+    setSelectedPreview(null);
     setSelectedPaths([]);
     setDrawerView({ kind: "closed" });
 
-    const roots = await listEntries("");
-    const rootNodes = roots.filter((entry) => entry.is_dir).map(toTreeNode);
+    const rootNodes = await buildTreeRoots();
     setTreeNodes(rootNodes);
     setExpandedKeys(
       targetPath
@@ -294,15 +399,49 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   }
 
   async function resolveInitialPath() {
-    const rootEntries = await listEntries("");
-    const preferred = rootEntries.find(
-      (entry) => entry.name === "Documents" && entry.is_dir,
-    );
-    if (preferred) {
-      return preferred.relative_path;
+    for (const preferredPath of preferredRoots()) {
+      try {
+        const items = await listEntries(preferredPath);
+        if (items.length > 0 || preferredPath) {
+          return preferredPath;
+        }
+      } catch {
+        continue;
+      }
     }
 
+    const rootEntries = await listEntries("");
     return rootEntries.find((entry) => entry.is_dir)?.relative_path || "";
+  }
+
+  async function buildTreeRoots(): Promise<TreeNode[]> {
+    const rootEntries = (await listEntries(""))
+      .filter((entry) => entry.is_dir)
+      .map(toTreeNode);
+
+    const quickRoots: TreeNode[] = [];
+    for (const preferredPath of preferredRoots().filter(Boolean)) {
+      try {
+        const parts = preferredPath.split("/");
+        const title =
+          parts[parts.length - 1] === "books"
+            ? "Books"
+            : parts[parts.length - 1];
+        quickRoots.push({
+          key: preferredPath,
+          title,
+          isLeaf: false,
+        });
+      } catch {
+        continue;
+      }
+    }
+
+    const unique = new Map<string, TreeNode>();
+    [...quickRoots, ...rootEntries].forEach((node) =>
+      unique.set(node.key, node),
+    );
+    return [...unique.values()];
   }
 
   async function loadTreeChildren(nodeKey: string) {
@@ -340,6 +479,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
       setEntries(flattened);
       setSelectedEntry(null);
       setSelectedEntryDetails(null);
+      setSelectedPreview(null);
       setSelectedPaths([]);
       setDrawerView({ kind: "closed" });
       return;
@@ -351,6 +491,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setEntries(results);
     setSelectedEntry(null);
     setSelectedEntryDetails(null);
+    setSelectedPreview(null);
     setSelectedPaths([]);
     setDrawerView({ kind: "closed" });
   }
@@ -371,6 +512,24 @@ export function DesktopApp({ mode }: DesktopAppProps) {
           });
 
     setSelectedEntryDetails(details);
+    if (mode === "preview") {
+      setSelectedPreview(
+        details.extension === "epub" || details.extension === "pdf"
+          ? {
+              mime_type: "image/svg+xml",
+              data_url: assetUrl("brand-mark.svg"),
+            }
+          : null,
+      );
+    } else if (details.extension === "epub" || details.extension === "pdf") {
+      const preview = await invoke<ReaderPreview | null>("get_reader_preview", {
+        relativePath: entry.relative_path,
+      });
+      setSelectedPreview(preview);
+    } else {
+      setSelectedPreview(null);
+    }
+    setDetailsCollapsed(false);
     setDrawerView({ kind: "entry", entry });
   }
 
@@ -442,6 +601,28 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setStatus(`Revealed ${selectedEntry.name} in Finder`);
   }
 
+  async function dragSelectedToFinder() {
+    if (!canUseNativeBridge || selectedPaths.length === 0) {
+      return;
+    }
+
+    const dragPaths = visibleEntries
+      .filter(
+        (entry) => selectedPaths.includes(entry.relative_path) && !entry.is_dir,
+      )
+      .map((entry) => entry.absolute_path);
+
+    if (dragPaths.length === 0) {
+      return;
+    }
+
+    const icon = createDragIconDataUrl();
+    await startDrag({
+      item: dragPaths,
+      icon,
+    });
+  }
+
   const usagePercent = useMemo(() => {
     if (!device.total_bytes || !device.used_bytes) {
       return 0;
@@ -495,6 +676,29 @@ export function DesktopApp({ mode }: DesktopAppProps) {
           <h1>Reader manager</h1>
         </div>
         <div className="topbar-actions">
+          <button
+            className="secondary icon-button"
+            type="button"
+            onClick={() => setNavCollapsed((current) => !current)}
+          >
+            {navCollapsed ? (
+              <PanelLeftOpen size={18} />
+            ) : (
+              <PanelLeftClose size={18} />
+            )}
+          </button>
+          <button
+            className="secondary icon-button"
+            type="button"
+            onClick={() => setDetailsCollapsed((current) => !current)}
+            disabled={drawerView.kind === "closed"}
+          >
+            {detailsCollapsed ? (
+              <PanelRightOpen size={18} />
+            ) : (
+              <PanelRightClose size={18} />
+            )}
+          </button>
           <button
             className="secondary"
             onClick={() => void refreshDevice()}
@@ -552,11 +756,26 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         <DisconnectedState onRefresh={() => void refreshDevice()} />
       ) : (
         <div
-          className={`workspace ${drawerOpen ? "workspace--drawer-open" : ""}`}
+          className={`workspace ${drawerOpen && !detailsCollapsed ? "workspace--drawer-open" : ""} ${navCollapsed ? "workspace--nav-collapsed" : ""}`}
         >
-          <aside className="workspace__nav">
+          <aside
+            className={`workspace__nav ${navCollapsed ? "workspace__nav--collapsed" : ""}`}
+          >
             <div className="nav-card">
-              <p className="eyebrow">Reader</p>
+              <div className="pane-heading">
+                {!navCollapsed ? <p className="eyebrow">Reader</p> : <span />}
+                <button
+                  className="secondary icon-button"
+                  type="button"
+                  onClick={() => setNavCollapsed((current) => !current)}
+                >
+                  {navCollapsed ? (
+                    <ChevronRight size={16} />
+                  ) : (
+                    <ChevronLeft size={16} />
+                  )}
+                </button>
+              </div>
               <button
                 className="nav-card__device"
                 type="button"
@@ -573,44 +792,79 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                 <span>{device.mounted_volumes || 1} volumes</span>
               </button>
             </div>
-            <div className="nav-card nav-card--tree">
-              <p className="eyebrow">Library tree</p>
-              <div className="nav-card__search">
-                <input
-                  aria-label="Search reader files"
-                  type="search"
-                  placeholder="Search files and folders"
-                  value={searchQuery}
-                  onChange={(event) => void searchEntries(event.target.value)}
+            {!navCollapsed ? (
+              <div className="nav-card nav-card--tree">
+                <p className="eyebrow">Library tree</p>
+                <div className="nav-card__search">
+                  <Search size={16} />
+                  <input
+                    aria-label="Search reader files"
+                    type="search"
+                    placeholder="Search files and folders"
+                    value={searchQuery}
+                    onChange={(event) => void searchEntries(event.target.value)}
+                  />
+                </div>
+                <Tree
+                  className="reader-tree"
+                  treeData={treeNodes}
+                  expandedKeys={expandedKeys}
+                  selectedKeys={[currentDir]}
+                  onExpand={(keys, info) => {
+                    setExpandedKeys(keys as string[]);
+                    if (info.expanded) {
+                      void loadTreeChildren(String(info.node.key));
+                    }
+                  }}
+                  onSelect={(keys, info) => {
+                    const key = String(keys[0] || info.node.key || "");
+                    if (!key) {
+                      return;
+                    }
+
+                    setIsSearching(false);
+                    setSearchQuery("");
+                    setCurrentDir(key);
+                    void loadDirectory(key, device, mode === "preview");
+                  }}
                 />
               </div>
-              <Tree
-                className="reader-tree"
-                treeData={treeNodes}
-                expandedKeys={expandedKeys}
-                selectedKeys={[currentDir]}
-                onExpand={(keys, info) => {
-                  setExpandedKeys(keys as string[]);
-                  if (info.expanded) {
-                    void loadTreeChildren(String(info.node.key));
-                  }
-                }}
-                onSelect={(keys, info) => {
-                  const key = String(keys[0] || info.node.key || "");
-                  if (!key) {
-                    return;
-                  }
-
-                  setIsSearching(false);
-                  setSearchQuery("");
-                  setCurrentDir(key);
-                  void loadDirectory(key, device, mode === "preview");
-                }}
-              />
-            </div>
+            ) : (
+              <div className="nav-card nav-card--collapsed-actions">
+                <button
+                  className="secondary icon-button"
+                  type="button"
+                  onClick={() => setNavCollapsed(false)}
+                >
+                  <Search size={16} />
+                </button>
+                <button
+                  className="secondary icon-button"
+                  type="button"
+                  onClick={() => setDrawerView({ kind: "device" })}
+                >
+                  <FolderOpen size={16} />
+                </button>
+              </div>
+            )}
           </aside>
 
           <section className="workspace__main">
+            {dragActive ? (
+              <div className="drop-overlay">
+                <div className="drop-overlay__panel">
+                  <Download size={28} />
+                  <strong>
+                    Drop books to import into{" "}
+                    {breadcrumbs[breadcrumbs.length - 1]?.label || "Reader"}
+                  </strong>
+                  <span>
+                    EPUB, PDF, TXT and other supported reader files will be
+                    copied into the current folder.
+                  </span>
+                </div>
+              </div>
+            ) : null}
             <div className="content-header">
               <div>
                 <div className="breadcrumbs">
@@ -666,14 +920,25 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                   type="button"
                   onClick={() => {
                     if (selectedEntry) {
+                      setDetailsCollapsed(false);
                       setDrawerView({ kind: "entry", entry: selectedEntry });
                     } else {
+                      setDetailsCollapsed(false);
                       setDrawerView({ kind: "device" });
                     }
                   }}
                   disabled={!selectedEntry}
                 >
                   Details
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onMouseDown={() => void dragSelectedToFinder()}
+                  disabled={!selectedPaths.length || !canUseNativeBridge}
+                >
+                  <ExternalLink size={16} />
+                  Drag to Finder
                 </button>
                 <button
                   className="secondary"
@@ -732,13 +997,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
               </div>
               {visibleEntries.length ? (
                 visibleEntries.map((entry) => {
-                  const kind = entry.is_dir
-                    ? "Folder"
-                    : entry.name.toLowerCase().endsWith(".pdf")
-                      ? "PDF"
-                      : entry.name.toLowerCase().endsWith(".epub")
-                        ? "EPUB"
-                        : "File";
+                  const kind = entry.is_dir ? "Folder" : fileKindLabel(entry);
                   return (
                     <button
                       key={entry.relative_path}
@@ -781,11 +1040,11 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                         />
                       </span>
                       <span className="content-row__name">
-                        <span className="content-row__badge">{kind}</span>
+                        <span className="content-row__icon">
+                          {iconForEntry(entry, false)}
+                        </span>
                         <span>
-                          <strong>
-                            {entry.name.replace(/\.(epub|pdf)$/i, "")}
-                          </strong>
+                          <strong>{stripDisplayExtension(entry.name)}</strong>
                           <small>{entry.relative_path}</small>
                         </span>
                       </span>
@@ -804,14 +1063,17 @@ export function DesktopApp({ mode }: DesktopAppProps) {
           </section>
 
           <DetailsDrawer
+            collapsed={detailsCollapsed}
             checkedAt={checkedAt}
             device={device}
             drawerView={drawerView}
             selectedEntryDetails={selectedEntryDetails}
+            selectedPreview={selectedPreview}
             modelLabel={modelLabel}
             onClose={() => setDrawerView({ kind: "closed" })}
             onReveal={() => void revealSelected()}
             onExport={() => void exportSelected()}
+            onToggleCollapsed={() => setDetailsCollapsed((current) => !current)}
           />
         </div>
       )}
@@ -847,22 +1109,28 @@ function DetailsDrawer({
   device,
   drawerView,
   selectedEntryDetails,
+  selectedPreview,
   modelLabel,
+  collapsed,
   checkedAt,
   onClose,
   onReveal,
   onExport,
+  onToggleCollapsed,
 }: {
   device: ReaderState;
   drawerView: DrawerView;
   selectedEntryDetails: ReaderEntryDetails | null;
+  selectedPreview: ReaderPreview | null;
   modelLabel: string;
+  collapsed: boolean;
   checkedAt: string | null;
   onClose: () => void;
   onReveal: () => void;
   onExport: () => void;
+  onToggleCollapsed: () => void;
 }) {
-  if (drawerView.kind === "closed") {
+  if (drawerView.kind === "closed" || collapsed) {
     return null;
   }
 
@@ -872,7 +1140,9 @@ function DetailsDrawer({
         <div>
           <p className="eyebrow">Details</p>
           <h3>
-            {drawerView.kind === "device" ? modelLabel : drawerView.entry.name}
+            {drawerView.kind === "device"
+              ? modelLabel
+              : selectedEntryDetails?.name || drawerView.entry.name}
           </h3>
         </div>
         <button className="secondary" type="button" onClick={onClose}>
@@ -906,6 +1176,15 @@ function DetailsDrawer({
         </div>
       ) : (
         <div className="details-drawer__body">
+          {selectedPreview ? (
+            <div className="details-preview">
+              <img src={selectedPreview.data_url} alt="Book preview" />
+            </div>
+          ) : (
+            <div className="details-preview details-preview--empty">
+              {iconForEntry(drawerView.entry, true)}
+            </div>
+          )}
           <DetailItem
             label="Name"
             value={selectedEntryDetails?.name || drawerView.entry.name}
@@ -949,13 +1228,23 @@ function DetailsDrawer({
           ) : null}
           <div className="details-drawer__actions">
             <button className="secondary" type="button" onClick={onReveal}>
+              <ExternalLink size={16} />
               Reveal in Finder
             </button>
             {!drawerView.entry.is_dir ? (
               <button className="primary" type="button" onClick={onExport}>
+                <Download size={16} />
                 Export file
               </button>
             ) : null}
+            <button
+              className="secondary"
+              type="button"
+              onClick={onToggleCollapsed}
+            >
+              <PanelRightClose size={16} />
+              Collapse
+            </button>
           </div>
         </div>
       )}
@@ -975,9 +1264,73 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 function toTreeNode(entry: ReaderEntry): TreeNode {
   return {
     key: entry.relative_path,
-    title: entry.name,
+    title: (
+      <span className="tree-label">
+        {iconForEntry(entry, false)}
+        <span>
+          {entry.relative_path === "database/media/books"
+            ? "Books"
+            : stripDisplayExtension(entry.name)}
+        </span>
+      </span>
+    ),
     isLeaf: false,
   };
+}
+
+function fileKindLabel(entry: ReaderEntry): string {
+  if (entry.extension?.toLowerCase() === "epub") return "EPUB";
+  if (entry.extension?.toLowerCase() === "pdf") return "PDF";
+  if (entry.extension?.toLowerCase() === "zip") return "ZIP";
+  if (entry.extension?.toLowerCase() === "lrf") return "LRF";
+  return "File";
+}
+
+function stripDisplayExtension(name: string): string {
+  return name.replace(/\.(epub|pdf|zip|lrf|txt|rtf)$/i, "");
+}
+
+function iconForEntry(entry: ReaderEntry, large: boolean) {
+  const size = large ? 56 : 20;
+  if (entry.is_dir) {
+    return <Folder size={size} />;
+  }
+  switch ((entry.extension || "").toLowerCase()) {
+    case "epub":
+    case "lrf":
+      return <BookOpen size={size} />;
+    case "pdf":
+      return <FileText size={size} />;
+    case "zip":
+      return <FileArchive size={size} />;
+    default:
+      return <File size={size} />;
+  }
+}
+
+function preferredRoots(): string[] {
+  return ["database/media/books", "Documents", "Digital Editions", ""];
+}
+
+function createDragIconDataUrl(): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = 96;
+  canvas.height = 96;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sO38p8AAAAASUVORK5CYII=";
+  }
+
+  context.fillStyle = "#6d4c33";
+  context.beginPath();
+  context.roundRect(8, 8, 80, 80, 20);
+  context.fill();
+  context.fillStyle = "#fff9f2";
+  context.font = "600 18px Avenir Next";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("BOOK", 48, 48);
+  return canvas.toDataURL("image/png");
 }
 
 function updateTreeChildren(

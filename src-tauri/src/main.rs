@@ -1,9 +1,13 @@
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use plist::Value;
+use roxmltree::Document;
 use serde::Serialize;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::UNIX_EPOCH;
+use zip::ZipArchive;
 
 type DiskInfo = (
     Option<String>,
@@ -75,6 +79,12 @@ struct ReaderEntryDetails {
     item_count: Option<usize>,
 }
 
+#[derive(Serialize)]
+struct ReaderPreview {
+    mime_type: String,
+    data_url: String,
+}
+
 #[tauri::command]
 fn get_reader_state() -> Result<ReaderState, String> {
     let volumes = discover_reader_volumes()?;
@@ -139,7 +149,10 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
         let entry = result.map_err(|error| error.to_string())?;
         let path = entry.path();
         let metadata = entry.metadata().map_err(|error| error.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        if should_hide_entry(&file_name) {
+            continue;
+        }
         let absolute_path = path.to_string_lossy().to_string();
         let relative = path
             .strip_prefix(reader_root_path()?)
@@ -147,6 +160,10 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
             .to_string_lossy()
             .trim_start_matches('/')
             .to_string();
+        let extension = path
+            .extension()
+            .map(|ext| ext.to_string_lossy().to_string());
+        let name = display_name_for_entry(&path, &file_name, extension.as_deref());
 
         entries.push(ReaderEntry {
             name,
@@ -154,9 +171,7 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
             absolute_path,
             is_dir: metadata.is_dir(),
             size: metadata.len(),
-            extension: path
-                .extension()
-                .map(|ext| ext.to_string_lossy().to_string()),
+            extension,
             modified_at: modified_at(&metadata),
         });
     }
@@ -185,21 +200,38 @@ fn get_reader_entry_details(relative_path: String) -> Result<ReaderEntryDetails,
         None
     };
 
+    let file_name = path
+        .file_name()
+        .map(|value| value.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Reader".to_string());
+    let extension = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_string());
+
     Ok(ReaderEntryDetails {
-        name: path
-            .file_name()
-            .map(|value| value.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Reader".to_string()),
+        name: display_name_for_entry(&path, &file_name, extension.as_deref()),
         relative_path,
         absolute_path: path.to_string_lossy().to_string(),
         is_dir: metadata.is_dir(),
         size: metadata.len(),
-        extension: path
-            .extension()
-            .map(|ext| ext.to_string_lossy().to_string()),
+        extension,
         modified_at: modified_at(&metadata),
         item_count,
     })
+}
+
+#[tauri::command]
+fn get_reader_preview(relative_path: String) -> Result<Option<ReaderPreview>, String> {
+    let path = resolve_reader_path(&relative_path)?;
+    let extension = path
+        .extension()
+        .map(|ext| ext.to_string_lossy().to_string().to_lowercase());
+
+    match extension.as_deref() {
+        Some("epub") => Ok(extract_epub_cover_preview(&path)),
+        Some("pdf") => Ok(generate_pdf_preview(&path)),
+        _ => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -438,7 +470,16 @@ fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> 
         let entry = item.map_err(|error| error.to_string())?;
         let entry_path = entry.path();
         let metadata = entry.metadata().map_err(|error| error.to_string())?;
-        let name = entry.file_name().to_string_lossy().to_string();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        if should_hide_entry(&file_name) {
+            continue;
+        }
+
+        let extension = entry_path
+            .extension()
+            .map(|ext| ext.to_string_lossy().to_string());
+        let name = display_name_for_entry(&entry_path, &file_name, extension.as_deref());
 
         if name.to_lowercase().contains(query) {
             let relative_path = entry_path
@@ -454,9 +495,7 @@ fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> 
                 absolute_path: entry_path.to_string_lossy().to_string(),
                 is_dir: metadata.is_dir(),
                 size: metadata.len(),
-                extension: entry_path
-                    .extension()
-                    .map(|ext| ext.to_string_lossy().to_string()),
+                extension,
                 modified_at: modified_at(&metadata),
             });
         }
@@ -475,6 +514,173 @@ fn modified_at(metadata: &fs::Metadata) -> Option<u64> {
         .ok()
         .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs())
+}
+
+fn should_hide_entry(name: &str) -> bool {
+    name.starts_with('.')
+}
+
+fn display_name_for_entry(path: &Path, file_name: &str, extension: Option<&str>) -> String {
+    if let Some(ext) = extension {
+        if ext.eq_ignore_ascii_case("epub") {
+            if let Some(title) = extract_epub_title(path) {
+                return title;
+            }
+        }
+    }
+
+    file_name.to_string()
+}
+
+fn extract_epub_cover_preview(path: &Path) -> Option<ReaderPreview> {
+    let file = fs::File::open(path).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
+    let (opf_path, opf_xml) = read_epub_opf(&mut archive)?;
+    let opf_doc = Document::parse(&opf_xml).ok()?;
+    let opf_base = Path::new(&opf_path)
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+
+    let cover_href = find_epub_cover_href(&opf_doc)?;
+    let resolved_path = normalize_zip_path(opf_base.join(cover_href));
+
+    let mut bytes = Vec::new();
+    archive
+        .by_name(&resolved_path)
+        .ok()?
+        .read_to_end(&mut bytes)
+        .ok()?;
+
+    let mime_type = guess_mime_from_path(&resolved_path).to_string();
+    Some(ReaderPreview {
+        data_url: format!("data:{};base64,{}", mime_type, STANDARD.encode(bytes)),
+        mime_type,
+    })
+}
+
+fn generate_pdf_preview(path: &Path) -> Option<ReaderPreview> {
+    let preview_dir = std::env::temp_dir().join("sony-ebook-library-revival-previews");
+    fs::create_dir_all(&preview_dir).ok()?;
+
+    let output = Command::new("qlmanage")
+        .args([
+            "-t",
+            "-s",
+            "512",
+            "-o",
+            preview_dir.to_string_lossy().as_ref(),
+            path.to_string_lossy().as_ref(),
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let png_name = format!("{}.png", path.file_name()?.to_string_lossy());
+    let bytes = fs::read(preview_dir.join(png_name)).ok()?;
+
+    Some(ReaderPreview {
+        mime_type: "image/png".to_string(),
+        data_url: format!("data:image/png;base64,{}", STANDARD.encode(bytes)),
+    })
+}
+
+fn extract_epub_title(path: &Path) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut archive = ZipArchive::new(file).ok()?;
+    let (_, opf_xml) = read_epub_opf(&mut archive)?;
+    let opf_doc = Document::parse(&opf_xml).ok()?;
+    opf_doc
+        .descendants()
+        .find(|node| node.tag_name().name() == "title")
+        .and_then(|node| node.text())
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+}
+
+fn read_epub_opf<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> Option<(String, String)> {
+    let container_path = "META-INF/container.xml";
+    let mut container_xml = String::new();
+    archive
+        .by_name(container_path)
+        .ok()?
+        .read_to_string(&mut container_xml)
+        .ok()?;
+
+    let container_doc = Document::parse(&container_xml).ok()?;
+    let opf_path = container_doc
+        .descendants()
+        .find(|node| node.tag_name().name() == "rootfile")?
+        .attribute("full-path")?
+        .to_string();
+
+    let mut opf_xml = String::new();
+    archive
+        .by_name(&opf_path)
+        .ok()?
+        .read_to_string(&mut opf_xml)
+        .ok()?;
+
+    Some((opf_path, opf_xml))
+}
+
+fn find_epub_cover_href(opf_doc: &Document<'_>) -> Option<String> {
+    if let Some(item) = opf_doc.descendants().find(|node| {
+        node.tag_name().name() == "item"
+            && node
+                .attribute("properties")
+                .map(|props| props.split_whitespace().any(|value| value == "cover-image"))
+                .unwrap_or(false)
+    }) {
+        return item.attribute("href").map(str::to_string);
+    }
+
+    if let Some(cover_id) = opf_doc.descendants().find_map(|node| {
+        (node.tag_name().name() == "meta" && node.attribute("name") == Some("cover"))
+            .then(|| node.attribute("content"))
+            .flatten()
+    }) {
+        return opf_doc.descendants().find_map(|node| {
+            (node.tag_name().name() == "item" && node.attribute("id") == Some(cover_id))
+                .then(|| node.attribute("href"))
+                .flatten()
+                .map(str::to_string)
+        });
+    }
+
+    opf_doc.descendants().find_map(|node| {
+        if node.tag_name().name() != "item" {
+            return None;
+        }
+        let media_type = node.attribute("media-type")?;
+        if media_type.starts_with("image/") {
+            node.attribute("href").map(str::to_string)
+        } else {
+            None
+        }
+    })
+}
+
+fn normalize_zip_path(path: PathBuf) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn guess_mime_from_path(path: &str) -> &'static str {
+    if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".gif") {
+        "image/gif"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else {
+        "application/octet-stream"
+    }
 }
 
 fn parse_diskutil_info(path: &str) -> DiskInfo {
@@ -531,10 +737,12 @@ fn format_bytes(value: u64) -> String {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
         .invoke_handler(tauri::generate_handler![
             get_reader_state,
             list_reader_entries,
             get_reader_entry_details,
+            get_reader_preview,
             search_reader_entries,
             copy_files_to_reader,
             export_reader_file,

@@ -10,7 +10,7 @@
 
 A modern macOS app for classic Sony Readers.
 
-It replaces Sony's dead setup-era utility with a cleaner local workflow for browsing the device, moving books, and managing files on current Macs.
+It replaces Sony's dead setup-era utility with a cleaner local workflow for browsing the device, previewing books, moving files in and out, and managing older readers on current Macs.
 
 Website: `https://speed785.github.io/sony-ebook-library-revival/`
 
@@ -22,9 +22,11 @@ Direct Mac download: `https://github.com/speed785/sony-ebook-library-revival/rel
 
 - detects mounted Sony Reader volumes on macOS
 - shows device details like model, mounted volumes, filesystem, and storage usage
-- browses the reader with a tree view, file list, and details drawer
+- browses the reader with a collapsible tree pane, file list, and collapsible details drawer
 - supports search, filtering, and sorting inside the reader workspace
-- imports books from Finder and exports selected files back to your Mac
+- prefers real book locations like `database/media/books` instead of just setup/manual folders
+- imports books from Finder, reveals files in Finder, exports selected files, and supports dragging selected files toward Finder from the app
+- previews EPUB and PDF items in the details drawer when metadata or thumbnails are available
 - keeps the public website focused on product information, screenshots, and downloads
 
 ## Why this exists
@@ -41,6 +43,8 @@ Older Sony readers still work well, but their original Mac software does not. Th
 <p align="center">
   <img src="public/screenshots/app-library.png" alt="Sony eBook Library Revival library browser" width="900" />
 </p>
+
+The latest screenshots reflect the current reader workspace, including the books root, preview drawer, and updated file navigation.
 
 ## Stack
 
@@ -70,6 +74,12 @@ Run the desktop app:
 
 ```bash
 npm run tauri:dev
+```
+
+Generate updated screenshots from the current preview route:
+
+```bash
+npm run screenshots
 ```
 
 Build the website:
@@ -107,12 +117,6 @@ Regenerate the macOS icon set:
 
 ```bash
 npm run icons:mac
-```
-
-Regenerate website screenshots from the app preview route:
-
-```bash
-npm run screenshots
 ```
 
 Branding files:

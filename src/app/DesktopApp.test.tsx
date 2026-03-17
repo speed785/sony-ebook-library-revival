@@ -14,7 +14,7 @@ describe("DesktopApp", () => {
     render(<DesktopApp mode="preview" />);
 
     expect(await screen.findByText("Reader connected")).toBeTruthy();
-    expect(screen.getAllByText("Documents").length).toBeGreaterThan(0);
-    expect(screen.getByText("The Left Hand of Darkness")).toBeTruthy();
+    expect(screen.getAllByText("Books").length).toBeGreaterThan(0);
+    expect(screen.getByText("Eat, Pray, Love")).toBeTruthy();
   });
 });

@@ -1,20 +1,5 @@
+import { Download, ExternalLink } from "lucide-react";
 import { assetUrl } from "../utils";
-
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M15.5 2.5c.1 1-.2 2-1 2.8-.8.8-1.8 1.2-2.7 1.2-.1-1 .3-2 1-2.7.8-.8 1.8-1.3 2.7-1.3Zm3 12.8c-.4 1-1 2-1.8 3-.9 1-1.8 2-3.2 2-1.2 0-1.6-.7-3-.7-1.3 0-1.8.7-3 .7-1.3 0-2.3-.9-3.2-2-.9-1-1.6-2.3-2-3.6C1.4 12.4 2 10 3.4 8.7 4.4 7.7 5.6 7 6.9 7c1.2 0 2 .8 3 .8 1 0 1.7-.8 3.1-.8 1.1 0 2.2.5 3.1 1.3-.7.4-2.1 1.5-2.1 3.6 0 2.5 2.2 3.4 2.5 3.5Z" />
-    </svg>
-  );
-}
-
-function GitHubIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.9.6-3.5-1.2-3.5-1.2-.5-1.1-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.5 2.4 1.1 3 .8.1-.7.4-1.1.7-1.4-2.3-.3-4.7-1.2-4.7-5 0-1.1.4-2 1-2.8 0-.2-.4-1.3.1-2.7 0 0 .9-.3 2.9 1a10 10 0 0 1 5.2 0c2-1.3 2.9-1 2.9-1 .5 1.4.2 2.5.1 2.7.7.8 1 1.7 1 2.8 0 3.8-2.4 4.7-4.7 5 .4.3.8 1 .8 2v3c0 .3.2.6.7.5A10 10 0 0 0 12 2Z" />
-    </svg>
-  );
-}
 
 export function Website() {
   return (
@@ -24,8 +9,8 @@ export function Website() {
           <h1>Sony eBook Library Revival</h1>
           <p>
             A modern desktop app for classic Sony Readers. It keeps local book
-            transfer and on-device browsing usable on current Macs without
-            leaning on abandoned store-era software.
+            transfer, book previews, and on-device browsing usable on current
+            Macs without leaning on abandoned store-era software.
           </p>
           <div className="site-meta">
             <span>Made for macOS</span>
@@ -37,7 +22,7 @@ export function Website() {
               className="primary site-link"
               href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg"
             >
-              <AppleIcon />
+              <Download size={18} />
               Download for Mac
             </a>
             <a
@@ -46,7 +31,7 @@ export function Website() {
               target="_blank"
               rel="noreferrer"
             >
-              <GitHubIcon />
+              <ExternalLink size={18} />
               View the repo
             </a>
           </div>
@@ -100,9 +85,9 @@ export function Website() {
           <div className="site-row__body">
             <h3>Built around direct access to the reader.</h3>
             <p>
-              Connect the device, browse its library, inspect folders, export
-              files, and move books across without sending the workflow through
-              a storefront or sync service.
+              Connect the device, browse the real books library, inspect
+              folders, preview supported files, and move books across without
+              sending the workflow through a storefront or sync service.
             </p>
           </div>
         </article>
@@ -112,8 +97,20 @@ export function Website() {
             <h3>Made for the formats these devices still handle well.</h3>
             <p>
               EPUB remains the clearest path for day-to-day reading. PDFs can be
-              managed too, with Calibre still useful when conversion or cleanup
-              is needed.
+              managed too, with drawer previews available in the app and Calibre
+              still useful when conversion or cleanup is needed.
+            </p>
+          </div>
+        </article>
+        <article className="site-row">
+          <div className="site-row__label">Workspace</div>
+          <div className="site-row__body">
+            <h3>Built around books, not setup files.</h3>
+            <p>
+              The app now favors actual reader book locations like
+              `database/media/books`, uses collapsible navigation and details
+              panes, and keeps import/export actions close to the files you are
+              working with.
             </p>
           </div>
         </article>
@@ -147,7 +144,7 @@ export function Website() {
             className="primary site-link site-link--large"
             href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg"
           >
-            <AppleIcon />
+            <Download size={18} />
             Download for Mac
           </a>
         </div>
