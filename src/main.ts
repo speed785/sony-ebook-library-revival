@@ -385,6 +385,9 @@ function renderWebLanding(root: HTMLDivElement): void {
             <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View the repo</a>
             <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest" target="_blank" rel="noreferrer">Release notes</a>
           </div>
+          <p class="site-note">
+            Made for people who still use dedicated reading hardware and want software that respects the device instead of forcing a storefront workflow.
+          </p>
         </div>
         <div class="site-preview" aria-label="Sony eBook Library Revival preview">
           <div class="site-preview__copy">

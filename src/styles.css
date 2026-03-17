@@ -28,7 +28,11 @@ body {
   font-family: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
   color: var(--paper-ink);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 28%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.7),
+      transparent 28%
+    ),
     linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
 }
 
@@ -145,6 +149,13 @@ input {
   margin-top: 28px;
 }
 
+.site-note {
+  max-width: 56ch;
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+}
+
 .site-link {
   text-decoration: none;
 }
@@ -228,7 +239,12 @@ input {
   height: 100%;
   border-radius: 10px;
   background:
-    linear-gradient(90deg, rgba(131, 136, 126, 0.18) 49%, rgba(131, 136, 126, 0.52) 50%, rgba(131, 136, 126, 0.16) 51%),
+    linear-gradient(
+      90deg,
+      rgba(131, 136, 126, 0.18) 49%,
+      rgba(131, 136, 126, 0.52) 50%,
+      rgba(131, 136, 126, 0.16) 51%
+    ),
     linear-gradient(180deg, #fafaf5, #e8e9df);
 }
 
@@ -374,7 +390,11 @@ input {
   min-height: 100vh;
   width: 100%;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(252, 252, 248, 0.92), rgba(236, 236, 228, 0.92));
+  background: linear-gradient(
+    180deg,
+    rgba(252, 252, 248, 0.92),
+    rgba(236, 236, 228, 0.92)
+  );
 }
 
 body.web-app .shell {
@@ -449,7 +469,11 @@ body.desktop-app .titlebar__dots {
   padding: 34px 28px;
   border-right: 1px solid var(--line);
   background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.58), transparent 34%),
+    radial-gradient(
+      circle at top left,
+      rgba(255, 255, 255, 0.58),
+      transparent 34%
+    ),
     linear-gradient(180deg, #f8f8f3, #ecece4);
 }
 
@@ -615,8 +639,18 @@ select {
   align-content: center;
   gap: 18px;
   background:
-    linear-gradient(180deg, rgba(251, 251, 246, 0.98), rgba(241, 241, 234, 0.96)),
-    repeating-linear-gradient(180deg, rgba(122, 126, 118, 0.04), rgba(122, 126, 118, 0.04) 1px, transparent 1px, transparent 22px);
+    linear-gradient(
+      180deg,
+      rgba(251, 251, 246, 0.98),
+      rgba(241, 241, 234, 0.96)
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(122, 126, 118, 0.04),
+      rgba(122, 126, 118, 0.04) 1px,
+      transparent 1px,
+      transparent 22px
+    );
 }
 
 .hero,
@@ -635,7 +669,11 @@ select {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 22%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16),
+    transparent 22%
+  );
 }
 
 .dropzone--active {
@@ -659,7 +697,9 @@ button {
   cursor: pointer;
   border: 0;
   padding: 12px 18px;
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
   text-decoration: none;
 }
 
@@ -678,6 +718,12 @@ button:hover {
   color: var(--paper-ink);
   background: var(--paper);
   border: 1px solid var(--line);
+}
+
+.primary,
+.secondary {
+  min-height: 48px;
+  padding-inline: 18px;
 }
 
 .filepane {
