@@ -1,0 +1,13 @@
+# Enforce LF line endings for all text files across all platforms.
+# This prevents Windows git from converting LF -> CRLF on checkout,
+# which would cause Prettier --check to fail on the CI Windows runner.
+* text=auto eol=lf
+
+# Binaries — no line-ending conversion
+*.png binary
+*.ico binary
+*.icns binary
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary

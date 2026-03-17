@@ -44,7 +44,7 @@ pub fn extra_disk_info(mount_point: &str) -> (Option<String>, Option<u64>, Optio
     let model = read_sysfs_model(mount_point);
 
     // Use `df --block-size=1 <mount>` for reliable byte counts
-    let (total, free) = df_bytes(mount_point);
+    let (total, free) = df_bytes(mount_point).unzip();
     (model, total, free)
 }
 
@@ -88,7 +88,9 @@ fn collect_from_device(device: &serde_json::Value, out: &mut Vec<DetectedVolume>
         .map(str::to_string);
 
     // Space info
-    let (_, total_bytes, free_bytes) = df_bytes(mount_point);
+    let (total_bytes, free_bytes) = df_bytes(mount_point)
+        .map(|(t, f)| (Some(t), Some(f)))
+        .unwrap_or((None, None));
 
     let role = infer_role(label.as_deref());
 
@@ -104,7 +106,8 @@ fn collect_from_device(device: &serde_json::Value, out: &mut Vec<DetectedVolume>
     });
 }
 
-fn df_bytes(mount_point: &str) -> (Option<String>, Option<u64>, Option<u64>) {
+/// Returns (total_bytes, free_bytes) from `df`, or None if unavailable.
+fn df_bytes(mount_point: &str) -> Option<(u64, u64)> {
     let output = Command::new("df")
         .args(["--block-size=1", "--output=size,avail", mount_point])
         .output()
@@ -114,9 +117,9 @@ fn df_bytes(mount_point: &str) -> (Option<String>, Option<u64>, Option<u64>) {
     // df output: header line + data line
     let data = text.lines().nth(1)?;
     let mut parts = data.split_whitespace();
-    let total = parts.next().and_then(|s| s.parse::<u64>().ok());
-    let free = parts.next().and_then(|s| s.parse::<u64>().ok());
-    (None, total, free)
+    let total = parts.next()?.parse::<u64>().ok()?;
+    let free = parts.next()?.parse::<u64>().ok()?;
+    Some((total, free))
 }
 
 /// Read a human-readable model string from sysfs for the device backing
