@@ -4,10 +4,16 @@
   <img src="public/brand-mark.svg" alt="Sony eBook Library Revival icon" width="128" height="128" />
 </p>
 
+<p align="center">
+  <img src="public/site-hero.svg" alt="Sony eBook Library Revival app preview" width="860" />
+</p>
+
 A clean-room remake of the classic Sony Reader setup experience, rebuilt as:
 
 - a modern macOS desktop app with Tauri
-- a TypeScript web build for GitHub Pages
+- a TypeScript project website
+
+Website: `https://speed785.github.io/sony-ebook-library-revival/`
 
 The goal is not to run Sony's old binary. The goal is to preserve the era and spirit of the original app while rebuilding it as a professional modern tool with an e-ink and aero-inspired visual direction.
 
@@ -19,11 +25,11 @@ The goal is not to run Sony's old binary. The goal is to preserve the era and sp
 - browses files on the Reader from the desktop app
 - supports drag-in import from Finder to the Reader
 - supports export of selected Reader files back to your Mac
-- ships a public Pages build as an informational site for the project
+- includes a public informational website for the project
 
 ## Why there are two builds
 
-The desktop app has real device access. The GitHub Pages build is intentionally informational now: it explains the tool, shows branded artwork, and links people to the app and repo, while the Tauri app remains the only build that interacts with the Reader.
+The desktop app has real device access. The website is intentionally informational: it explains the tool, shows branded artwork, and links people to the app and repo, while the Tauri app remains the only build that interacts with the Reader.
 
 ## Stack
 
@@ -38,7 +44,12 @@ The desktop app has real device access. The GitHub Pages build is intentionally 
 
 - Web favicon: `public/brand-mark.svg`
 - Desktop app icon source: `src-tauri/icons/icon.png`
+- Desktop app bundle icon set: `src-tauri/icons/icon.icns`
 - In-app brand mark: reused in the hero header so the app and docs share the same identity
+
+## Dependency note
+
+`npm audit` is clean locally. The remaining GitHub security warning appears to come from upstream Rust GUI dependencies pulled in by Tauri's cross-platform stack, rather than from this project's own TypeScript dependencies.
 
 ## Development
 

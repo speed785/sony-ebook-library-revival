@@ -29,6 +29,6 @@
     "macOS": {
       "minimumSystemVersion": "13.0"
     },
-    "icon": ["icons/icon.png"]
+    "icon": ["icons/icon.png", "icons/icon.icns"]
   }
 }

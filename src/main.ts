@@ -51,6 +51,11 @@ const regions = {
 };
 
 const isDesktop = "__TAURI_INTERNALS__" in window;
+const assetBase = import.meta.env.BASE_URL;
+
+function assetUrl(path: string): string {
+  return `${assetBase}${path}`;
+}
 
 document.body.classList.add(isDesktop ? "desktop-app" : "web-app");
 
@@ -122,13 +127,13 @@ if (isDesktop) {
       <div class="frame">
         <aside class="hero">
           <div class="hero__badge-wrap">
-            <img class="hero__brand" src="/brand-mark.svg" alt="Sony eBook Library Revival icon" />
+            <img class="hero__brand" src="${assetUrl("brand-mark.svg")}" alt="Sony eBook Library Revival icon" />
             <div class="hero__badge">PRS Revival</div>
           </div>
           <h1>Sony Reader, remade for current macOS.</h1>
           <p>
             A desktop-first tribute to the original Sony setup app, rebuilt in TypeScript and Tauri,
-            with a GitHub Pages companion build for the public showcase.
+            with a polished project site for documentation and discovery.
           </p>
           <ul class="hero__facts">
             <li>Original setup flow reinterpreted for today</li>
@@ -362,22 +367,22 @@ function renderWebLanding(root: HTMLDivElement): void {
       <section class="site-hero">
         <div class="site-hero__copy">
           <div class="hero__badge-wrap hero__badge-wrap--site">
-            <img class="hero__brand" src="/brand-mark.svg" alt="Sony eBook Library Revival icon" />
-            <div class="hero__badge">Desktop App + GitHub Pages</div>
+            <img class="hero__brand" src="${assetUrl("brand-mark.svg")}" alt="Sony eBook Library Revival icon" />
+            <div class="hero__badge">Mac App + Project Site</div>
           </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
-            A modern remake of Sony's classic Reader setup software. The desktop app does the real work:
-            detect devices, browse mounted files, and move books on and off the reader. This website is now the public
+            A modern remake of Sony's classic Reader setup software. The Mac app does the real work:
+            detect devices, browse mounted files, and move books on and off the reader. This website is the public
             home for the project and explains what the app does.
           </p>
           <div class="site-actions">
-            <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View on GitHub</a>
+            <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View the repo</a>
             <a class="secondary site-link" href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Why Calibre still matters</a>
           </div>
         </div>
         <div class="site-hero__art">
-          <img src="/site-hero.svg" alt="Illustration of the Sony eBook Library Revival desktop app and reader workflow" />
+          <img src="${assetUrl("site-hero.svg")}" alt="Illustration of the Sony eBook Library Revival desktop app and reader workflow" />
         </div>
       </section>
 
@@ -393,7 +398,7 @@ function renderWebLanding(root: HTMLDivElement): void {
           <p class="eyebrow">Website</p>
           <h2>The site is now informational.</h2>
           <p>
-            Instead of pretending to be the app, the Pages build now acts as project documentation, a visual showcase, and a way for people to discover the desktop tool.
+            Instead of pretending to be the app, the site acts as project documentation, a visual showcase, and a way for people to discover the Mac tool.
           </p>
         </article>
         <article class="site-card">
@@ -555,12 +560,12 @@ async function revealSelected(): Promise<void> {
 
 function render(): void {
   statusPill.textContent = uiState.status;
-  platformChip.textContent = uiState.desktop ? "Desktop app" : "GitHub Pages";
+  platformChip.textContent = uiState.desktop ? "Desktop app" : "Project site";
   modeChip.textContent = uiState.desktop ? "Live device mode" : "Showcase mode";
   pathPill.textContent = `/${uiState.currentDir}`.replace(/\/$/, "") || "/";
   toolbarText.textContent = uiState.desktop
     ? "Drag files in from Finder. Export selected items back out to your Mac."
-    : "The public web build shows the interface; device access is available in the desktop app.";
+    : "The project site explains the app; device access is available in the desktop app.";
 
   deviceGrid.innerHTML = [
     deviceTile(

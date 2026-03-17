@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a problem with the desktop app or Pages build
+about: Report a problem with the desktop app or project website
 title: "[Bug] "
 labels: bug
 assignees: ""
@@ -16,4 +16,4 @@ assignees: ""
 
 - macOS version:
 - Device model:
-- App mode: desktop or pages
+- App mode: desktop or website

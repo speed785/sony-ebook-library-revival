@@ -5,7 +5,7 @@
 This repository has two intentionally different surfaces:
 
 - the `Tauri` desktop app is the real working tool
-- the `GitHub Pages` site is informational and promotional only
+- the project site is informational and promotional only
 
 Do not reintroduce live device access to the web build.
 
@@ -24,7 +24,7 @@ Do not reintroduce live device access to the web build.
 
 ## Web behavior
 
-- The Pages build should remain a landing page / docs surface
+- The project site should remain a landing page / docs surface
 - It may include screenshots, illustrations, feature lists, downloads, and contributor docs
 - It should not pretend to browse local reader files in-browser
 
