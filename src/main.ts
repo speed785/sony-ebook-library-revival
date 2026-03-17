@@ -52,6 +52,8 @@ const regions = {
 
 const isDesktop = "__TAURI_INTERNALS__" in window;
 
+document.body.classList.add(isDesktop ? "desktop-app" : "web-app");
+
 const uiState: UiState = {
   language: localStorage.getItem("sony-revival-language") || "en",
   region: localStorage.getItem("sony-revival-region") || "US",
@@ -74,11 +76,35 @@ const uiState: UiState = {
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
+let statusPill!: HTMLDivElement;
+let platformChip!: HTMLSpanElement;
+let modeChip!: HTMLSpanElement;
+let deviceGrid!: HTMLDivElement;
+let languageSelect!: HTMLSelectElement;
+let regionSelect!: HTMLSelectElement;
+let pathPill!: HTMLDivElement;
+let toolbarText!: HTMLDivElement;
+let fileList!: HTMLDivElement;
+let dropzone!: HTMLDivElement;
+let fileInput!: HTMLInputElement;
+let refreshDevice!: HTMLButtonElement;
+let openLauncher!: HTMLButtonElement;
+let upDir!: HTMLButtonElement;
+let reloadFiles!: HTMLButtonElement;
+let exportFile!: HTMLButtonElement;
+let revealFile!: HTMLButtonElement;
+let copyTips!: HTMLButtonElement;
+
 if (!app) {
   throw new Error("#app element is missing");
 }
 
-app.innerHTML = `
+if (!isDesktop) {
+  renderWebLanding(app);
+}
+
+if (isDesktop) {
+  app.innerHTML = `
   <main class="shell">
     <section class="window" aria-label="Sony eBook Library Revival">
       <header class="titlebar">
@@ -95,7 +121,10 @@ app.innerHTML = `
 
       <div class="frame">
         <aside class="hero">
-          <div class="hero__badge">PRS Revival</div>
+          <div class="hero__badge-wrap">
+            <img class="hero__brand" src="/brand-mark.svg" alt="Sony eBook Library Revival icon" />
+            <div class="hero__badge">PRS Revival</div>
+          </div>
           <h1>Sony Reader, remade for current macOS.</h1>
           <p>
             A desktop-first tribute to the original Sony setup app, rebuilt in TypeScript and Tauri,
@@ -216,115 +245,168 @@ app.innerHTML = `
   </main>
 `;
 
-const statusPill = must<HTMLDivElement>("#status-pill");
-const platformChip = must<HTMLSpanElement>("#platform-chip");
-const modeChip = must<HTMLSpanElement>("#mode-chip");
-const deviceGrid = must<HTMLDivElement>("#device-grid");
-const languageSelect = must<HTMLSelectElement>("#language-select");
-const regionSelect = must<HTMLSelectElement>("#region-select");
-const pathPill = must<HTMLDivElement>("#path-pill");
-const toolbarText = must<HTMLDivElement>("#toolbar-text");
-const fileList = must<HTMLDivElement>("#file-list");
-const dropzone = must<HTMLDivElement>("#dropzone");
-const fileInput = must<HTMLInputElement>("#file-input");
-const refreshDevice = must<HTMLButtonElement>("#refresh-device");
-const openLauncher = must<HTMLButtonElement>("#open-launcher");
-const upDir = must<HTMLButtonElement>("#up-dir");
-const reloadFiles = must<HTMLButtonElement>("#reload-files");
-const exportFile = must<HTMLButtonElement>("#export-file");
-const revealFile = must<HTMLButtonElement>("#reveal-file");
-const copyTips = must<HTMLButtonElement>("#copy-tips");
+  statusPill = must<HTMLDivElement>("#status-pill");
+  platformChip = must<HTMLSpanElement>("#platform-chip");
+  modeChip = must<HTMLSpanElement>("#mode-chip");
+  deviceGrid = must<HTMLDivElement>("#device-grid");
+  languageSelect = must<HTMLSelectElement>("#language-select");
+  regionSelect = must<HTMLSelectElement>("#region-select");
+  pathPill = must<HTMLDivElement>("#path-pill");
+  toolbarText = must<HTMLDivElement>("#toolbar-text");
+  fileList = must<HTMLDivElement>("#file-list");
+  dropzone = must<HTMLDivElement>("#dropzone");
+  fileInput = must<HTMLInputElement>("#file-input");
+  refreshDevice = must<HTMLButtonElement>("#refresh-device");
+  openLauncher = must<HTMLButtonElement>("#open-launcher");
+  upDir = must<HTMLButtonElement>("#up-dir");
+  reloadFiles = must<HTMLButtonElement>("#reload-files");
+  exportFile = must<HTMLButtonElement>("#export-file");
+  revealFile = must<HTMLButtonElement>("#reveal-file");
+  copyTips = must<HTMLButtonElement>("#copy-tips");
 
-languageSelect.value = uiState.language;
-regionSelect.value = uiState.region;
+  languageSelect.value = uiState.language;
+  regionSelect.value = uiState.region;
 
-languageSelect.addEventListener("change", () => {
-  uiState.language = languageSelect.value;
-  localStorage.setItem("sony-revival-language", uiState.language);
-  render();
-});
+  languageSelect.addEventListener("change", () => {
+    uiState.language = languageSelect.value;
+    localStorage.setItem("sony-revival-language", uiState.language);
+    render();
+  });
 
-regionSelect.addEventListener("change", () => {
-  uiState.region = regionSelect.value;
-  localStorage.setItem("sony-revival-region", uiState.region);
-  render();
-});
+  regionSelect.addEventListener("change", () => {
+    uiState.region = regionSelect.value;
+    localStorage.setItem("sony-revival-region", uiState.region);
+    render();
+  });
 
-refreshDevice.addEventListener("click", () => {
+  refreshDevice.addEventListener("click", () => {
+    void refreshDeviceState();
+  });
+
+  openLauncher.addEventListener("click", () => {
+    if (uiState.device.launcher_available && uiState.device.launcher_path) {
+      uiState.status = `Legacy launcher volume found at ${uiState.device.launcher_path}`;
+    } else {
+      uiState.status = "Launcher volume not detected";
+    }
+    render();
+  });
+
+  upDir.addEventListener("click", () => {
+    const parts = uiState.currentDir.split("/").filter(Boolean);
+    parts.pop();
+    uiState.currentDir = parts.join("/");
+    void loadEntries();
+  });
+
+  reloadFiles.addEventListener("click", () => {
+    void loadEntries();
+  });
+
+  fileInput.addEventListener("change", () => {
+    const files = Array.from(fileInput.files || []);
+    if (files.length > 0) {
+      void handleBrowserFiles(files);
+    }
+  });
+
+  dropzone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    dropzone.classList.add("dropzone--active");
+  });
+
+  dropzone.addEventListener("dragleave", () => {
+    dropzone.classList.remove("dropzone--active");
+  });
+
+  dropzone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    dropzone.classList.remove("dropzone--active");
+    const files = Array.from(event.dataTransfer?.files || []);
+    if (files.length > 0) {
+      void handleBrowserFiles(files);
+    }
+  });
+
+  exportFile.addEventListener("click", () => {
+    void exportSelected();
+  });
+
+  revealFile.addEventListener("click", () => {
+    void revealSelected();
+  });
+
+  copyTips.addEventListener("click", async () => {
+    const text = [
+      "EPUB works best on the PRS-300.",
+      "PDF is supported, but the small screen is less comfortable.",
+      "Use Calibre for metadata cleanup and send-to-device workflows.",
+      "Always eject the Reader cleanly after transfers.",
+    ].join("\n");
+
+    await navigator.clipboard.writeText(text);
+    uiState.status = "PRS-300 tips copied";
+    render();
+  });
+
+  if (isDesktop) {
+    void attachDesktopDropListener();
+  }
+
   void refreshDeviceState();
-});
-
-openLauncher.addEventListener("click", () => {
-  if (uiState.device.launcher_available && uiState.device.launcher_path) {
-    uiState.status = `Legacy launcher volume found at ${uiState.device.launcher_path}`;
-  } else {
-    uiState.status = "Launcher volume not detected";
-  }
-  render();
-});
-
-upDir.addEventListener("click", () => {
-  const parts = uiState.currentDir.split("/").filter(Boolean);
-  parts.pop();
-  uiState.currentDir = parts.join("/");
-  void loadEntries();
-});
-
-reloadFiles.addEventListener("click", () => {
-  void loadEntries();
-});
-
-fileInput.addEventListener("change", () => {
-  const files = Array.from(fileInput.files || []);
-  if (files.length > 0) {
-    void handleBrowserFiles(files);
-  }
-});
-
-dropzone.addEventListener("dragover", (event) => {
-  event.preventDefault();
-  dropzone.classList.add("dropzone--active");
-});
-
-dropzone.addEventListener("dragleave", () => {
-  dropzone.classList.remove("dropzone--active");
-});
-
-dropzone.addEventListener("drop", (event) => {
-  event.preventDefault();
-  dropzone.classList.remove("dropzone--active");
-  const files = Array.from(event.dataTransfer?.files || []);
-  if (files.length > 0) {
-    void handleBrowserFiles(files);
-  }
-});
-
-exportFile.addEventListener("click", () => {
-  void exportSelected();
-});
-
-revealFile.addEventListener("click", () => {
-  void revealSelected();
-});
-
-copyTips.addEventListener("click", async () => {
-  const text = [
-    "EPUB works best on the PRS-300.",
-    "PDF is supported, but the small screen is less comfortable.",
-    "Use Calibre for metadata cleanup and send-to-device workflows.",
-    "Always eject the Reader cleanly after transfers.",
-  ].join("\n");
-
-  await navigator.clipboard.writeText(text);
-  uiState.status = "PRS-300 tips copied";
-  render();
-});
-
-if (isDesktop) {
-  void attachDesktopDropListener();
 }
 
-void refreshDeviceState();
+function renderWebLanding(root: HTMLDivElement): void {
+  root.innerHTML = `
+    <main class="site-shell">
+      <section class="site-hero">
+        <div class="site-hero__copy">
+          <div class="hero__badge-wrap hero__badge-wrap--site">
+            <img class="hero__brand" src="/brand-mark.svg" alt="Sony eBook Library Revival icon" />
+            <div class="hero__badge">Desktop App + GitHub Pages</div>
+          </div>
+          <h1>Sony eBook Library Revival</h1>
+          <p>
+            A modern remake of Sony's classic Reader setup software. The desktop app does the real work:
+            detect devices, browse mounted files, and move books on and off the reader. This website is now the public
+            home for the project and explains what the app does.
+          </p>
+          <div class="site-actions">
+            <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View on GitHub</a>
+            <a class="secondary site-link" href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Why Calibre still matters</a>
+          </div>
+        </div>
+        <div class="site-hero__art">
+          <img src="/site-hero.svg" alt="Illustration of the Sony eBook Library Revival desktop app and reader workflow" />
+        </div>
+      </section>
+
+      <section class="site-grid">
+        <article class="site-card">
+          <p class="eyebrow">Desktop app</p>
+          <h2>The app is the real tool.</h2>
+          <p>
+            The macOS app detects the mounted Reader, shows storage details, browses files on-device, supports Finder drag-in import, and exports selected files back to your Mac.
+          </p>
+        </article>
+        <article class="site-card">
+          <p class="eyebrow">Website</p>
+          <h2>The site is now informational.</h2>
+          <p>
+            Instead of pretending to be the app, the Pages build now acts as project documentation, a visual showcase, and a way for people to discover the desktop tool.
+          </p>
+        </article>
+        <article class="site-card">
+          <p class="eyebrow">Origins</p>
+          <h2>Built from the old Sony launcher.</h2>
+          <p>
+            The project is a clean-room remake informed by the original PRS launcher resources, but rebuilt for modern Macs with TypeScript and Tauri.
+          </p>
+        </article>
+      </section>
+    </main>
+  `;
+}
 
 async function refreshDeviceState(): Promise<void> {
   if (!isDesktop) {

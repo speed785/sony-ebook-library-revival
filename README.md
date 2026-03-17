@@ -1,25 +1,29 @@
 # Sony eBook Library Revival
 
+<p align="center">
+  <img src="public/brand-mark.svg" alt="Sony eBook Library Revival icon" width="128" height="128" />
+</p>
+
 A clean-room remake of the classic Sony Reader setup experience, rebuilt as:
 
 - a modern macOS desktop app with Tauri
 - a TypeScript web build for GitHub Pages
 
-The goal is not to run Sony's old binary. The goal is to preserve the feel of the original app while making it useful on current systems.
+The goal is not to run Sony's old binary. The goal is to preserve the era and spirit of the original app while rebuilding it as a professional modern tool with an e-ink and aero-inspired visual direction.
 
 ## What it does
 
-- recreates the Sony setup flow with a modern Mac-style interface
+- recreates the Sony setup flow with an e-ink meets aero interface
 - detects mounted Sony Reader volumes in the desktop app
 - shows connected-device details like model and available space
 - browses files on the Reader from the desktop app
 - supports drag-in import from Finder to the Reader
 - supports export of selected Reader files back to your Mac
-- ships a public Pages build for documentation and demo purposes
+- ships a public Pages build as an informational site for the project
 
 ## Why there are two builds
 
-The desktop app has real device access. The GitHub Pages build is a public-facing showcase built from the same TypeScript frontend, but browsers cannot directly inspect mounted Sony volumes the way the Tauri app can.
+The desktop app has real device access. The GitHub Pages build is intentionally informational now: it explains the tool, shows branded artwork, and links people to the app and repo, while the Tauri app remains the only build that interacts with the Reader.
 
 ## Stack
 
@@ -29,6 +33,12 @@ The desktop app has real device access. The GitHub Pages build is a public-facin
 - Rust
 - ESLint + Prettier
 - GitHub Actions
+
+## Branding
+
+- Web favicon: `public/brand-mark.svg`
+- Desktop app icon source: `src-tauri/icons/icon.png`
+- In-app brand mark: reused in the hero header so the app and docs share the same identity
 
 ## Development
 

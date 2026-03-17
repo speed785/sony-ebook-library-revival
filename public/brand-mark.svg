@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Sony eBook Library Revival icon</title>
+  <desc id="desc">An e-ink and aero inspired app icon with a glass blue reader body and soft paper screen.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fcff" />
+      <stop offset="45%" stop-color="#d9e8f3" />
+      <stop offset="100%" stop-color="#7ea4c1" />
+    </linearGradient>
+    <linearGradient id="device" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#82b5d7" />
+      <stop offset="58%" stop-color="#4f7ea4" />
+      <stop offset="100%" stop-color="#2b4964" />
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.74" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5f7f0" />
+      <stop offset="100%" stop-color="#dfe4da" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)" />
+  <rect x="24" y="22" width="464" height="210" rx="96" fill="url(#glass)" opacity="0.6" />
+  <rect x="98" y="76" width="316" height="360" rx="44" fill="url(#device)" />
+  <rect x="108" y="86" width="296" height="74" rx="36" fill="url(#glass)" opacity="0.38" />
+  <rect x="128" y="108" width="256" height="280" rx="18" fill="url(#screen)" />
+  <path d="M182 168c28-16 63-24 104-24 17 0 35 2 54 6v148c-17-7-34-10-54-10-39 0-74 11-104 30V168Z" fill="#f3f5ee" />
+  <path d="M330 168c-28-16-63-24-104-24-17 0-35 2-54 6v148c17-7 34-10 54-10 39 0 74 11 104 30V168Z" fill="#fbfdf8" opacity="0.94" />
+  <path d="M256 152v170" stroke="#8fa29a" stroke-width="8" stroke-linecap="round" />
+  <path d="M174 195c22-9 45-13 69-13" stroke="#7d8d86" stroke-width="10" stroke-linecap="round" opacity="0.65" />
+  <path d="M174 231c22-9 45-13 69-13" stroke="#7d8d86" stroke-width="10" stroke-linecap="round" opacity="0.45" />
+  <path d="M269 182c23 0 46 4 69 13" stroke="#7d8d86" stroke-width="10" stroke-linecap="round" opacity="0.65" />
+  <path d="M269 218c23 0 46 4 69 13" stroke="#7d8d86" stroke-width="10" stroke-linecap="round" opacity="0.45" />
+  <circle cx="256" cy="410" r="12" fill="#d8e4ea" />
+  <path d="M382 126c18 12 34 30 44 52" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.7" />
+  <path d="M116 432c80-30 172-31 280 0" stroke="#24445f" stroke-width="14" stroke-linecap="round" opacity="0.14" />
+</svg>
