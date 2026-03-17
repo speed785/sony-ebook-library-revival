@@ -37,6 +37,10 @@ const previewDevice: ReaderState = {
   total_bytes: 487587840,
   free_bytes: 466721792,
   used_bytes: 20866048,
+  volume_name: "READER",
+  filesystem_type: "msdos",
+  filesystem_name: "MS-DOS FAT16",
+  mounted_volumes: 2,
 };
 
 const previewEntries: Record<string, ReaderEntry[]> = {
@@ -137,6 +141,10 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     total_bytes: null,
     free_bytes: null,
     used_bytes: null,
+    volume_name: null,
+    filesystem_type: null,
+    filesystem_name: null,
+    mounted_volumes: 0,
   });
   const [status, setStatus] = useState("Looking for a connected reader");
   const [currentDir, setCurrentDir] = useState("");
@@ -144,12 +152,20 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   const [selectedEntry, setSelectedEntry] = useState<ReaderEntry | null>(null);
   const [selectedEntryDetails, setSelectedEntryDetails] =
     useState<ReaderEntryDetails | null>(null);
+  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const [drawerView, setDrawerView] = useState<DrawerView>({ kind: "closed" });
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const [sortKey, setSortKey] = useState<"name" | "type" | "date" | "size">(
+    "name",
+  );
+  const [filterKey, setFilterKey] = useState<
+    "all" | "folders" | "epub" | "pdf"
+  >("all");
+  const [transferState, setTransferState] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshDevice();
@@ -223,6 +239,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         setTreeNodes([]);
         setSelectedEntry(null);
         setSelectedEntryDetails(null);
+        setSelectedPaths([]);
         setDrawerView({ kind: "closed" });
         return;
       }
@@ -259,6 +276,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setEntries(nextEntries);
     setSelectedEntry(null);
     setSelectedEntryDetails(null);
+    setSelectedPaths([]);
     setDrawerView({ kind: "closed" });
 
     const roots = await listEntries("");
@@ -322,6 +340,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
       setEntries(flattened);
       setSelectedEntry(null);
       setSelectedEntryDetails(null);
+      setSelectedPaths([]);
       setDrawerView({ kind: "closed" });
       return;
     }
@@ -332,6 +351,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     setEntries(results);
     setSelectedEntry(null);
     setSelectedEntryDetails(null);
+    setSelectedPaths([]);
     setDrawerView({ kind: "closed" });
   }
 
@@ -355,6 +375,9 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   }
 
   async function copyIntoReader(sourcePaths: string[]) {
+    setTransferState(
+      `Copying ${sourcePaths.length} file${sourcePaths.length === 1 ? "" : "s"}`,
+    );
     setStatus(
       `Copying ${sourcePaths.length} file${sourcePaths.length === 1 ? "" : "s"} to the reader`,
     );
@@ -364,6 +387,9 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     });
     await loadDirectory(currentDir, device, mode === "preview");
     setStatus(
+      `Imported ${sourcePaths.length} item${sourcePaths.length === 1 ? "" : "s"}`,
+    );
+    setTransferState(
       `Imported ${sourcePaths.length} item${sourcePaths.length === 1 ? "" : "s"}`,
     );
   }
@@ -402,6 +428,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     });
 
     setStatus(`Exported ${selectedEntry.name}`);
+    setTransferState(`Exported ${selectedEntry.name}`);
   }
 
   async function revealSelected() {
@@ -425,6 +452,40 @@ export function DesktopApp({ mode }: DesktopAppProps) {
 
   const breadcrumbs = breadcrumbParts(currentDir);
   const drawerOpen = drawerView.kind !== "closed";
+  const modelLabel = device.model || device.volume_name || "Sony Reader";
+  const visibleEntries = useMemo(() => {
+    const filtered = entries.filter((entry) => {
+      if (filterKey === "all") {
+        return true;
+      }
+
+      if (filterKey === "folders") {
+        return entry.is_dir;
+      }
+
+      return entry.extension?.toLowerCase() === filterKey;
+    });
+
+    return [...filtered].sort((left, right) => {
+      switch (sortKey) {
+        case "size":
+          return right.size - left.size;
+        case "date":
+          return (right.modified_at || 0) - (left.modified_at || 0);
+        case "type": {
+          const leftType = left.is_dir ? "folder" : left.extension || "file";
+          const rightType = right.is_dir ? "folder" : right.extension || "file";
+          return (
+            leftType.localeCompare(rightType) ||
+            left.name.localeCompare(right.name)
+          );
+        }
+        case "name":
+        default:
+          return left.name.localeCompare(right.name);
+      }
+    });
+  }, [entries, filterKey, sortKey]);
 
   return (
     <main className="app-shell">
@@ -456,7 +517,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         <div className="device-banner__primary">
           <strong>
             {device.reader_available
-              ? device.model || "Sony Reader"
+              ? modelLabel
               : "Connect a Sony Reader over USB"}
           </strong>
           <span>{status}</span>
@@ -471,8 +532,12 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             <span>{device.used_space || "--"}</span>
           </div>
           <div>
-            <label>Battery</label>
-            <span>Unavailable</span>
+            <label>Format</label>
+            <span>{device.filesystem_name || "Unavailable"}</span>
+          </div>
+          <div>
+            <label>Volumes</label>
+            <span>{device.mounted_volumes || 0}</span>
           </div>
         </div>
         <div className="device-banner__meter">
@@ -498,12 +563,14 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                 onClick={() => setDrawerView({ kind: "device" })}
               >
                 <div>
-                  <strong>{device.model || "Sony Reader"}</strong>
-                  <span>{device.reader_path || "Mounted volume"}</span>
+                  <strong>{modelLabel}</strong>
+                  <span>
+                    {device.volume_name ||
+                      device.reader_path ||
+                      "Mounted volume"}
+                  </span>
                 </div>
-                <span>
-                  {device.launcher_available ? "2 volumes" : "1 volume"}
-                </span>
+                <span>{device.mounted_volumes || 1} volumes</span>
               </button>
             </div>
             <div className="nav-card nav-card--tree">
@@ -572,6 +639,20 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                 </h2>
               </div>
               <div className="content-actions">
+                <select
+                  aria-label="Sort files"
+                  value={sortKey}
+                  onChange={(event) =>
+                    setSortKey(
+                      event.target.value as "name" | "type" | "date" | "size",
+                    )
+                  }
+                >
+                  <option value="name">Sort: Name</option>
+                  <option value="type">Sort: Type</option>
+                  <option value="date">Sort: Updated</option>
+                  <option value="size">Sort: Size</option>
+                </select>
                 <button
                   className="secondary"
                   type="button"
@@ -609,6 +690,33 @@ export function DesktopApp({ mode }: DesktopAppProps) {
               </div>
             </div>
 
+            <div className="content-toolbar">
+              <div className="filter-chips">
+                {[
+                  ["all", "All"],
+                  ["folders", "Folders"],
+                  ["epub", "EPUB"],
+                  ["pdf", "PDF"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={`filter-chip ${filterKey === value ? "filter-chip--active" : ""}`}
+                    type="button"
+                    onClick={() =>
+                      setFilterKey(value as "all" | "folders" | "epub" | "pdf")
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="selection-summary">
+                {selectedPaths.length
+                  ? `${selectedPaths.length} item${selectedPaths.length === 1 ? "" : "s"} selected`
+                  : transferState || "Choose a file to inspect or export"}
+              </div>
+            </div>
+
             <div className="content-list">
               {isSearching ? (
                 <div className="content-search-state">
@@ -616,13 +724,14 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                 </div>
               ) : null}
               <div className="content-list__header">
+                <span>Select</span>
                 <span>Item</span>
                 <span>Type</span>
                 <span>Updated</span>
                 <span>Size</span>
               </div>
-              {entries.length ? (
-                entries.map((entry) => {
+              {visibleEntries.length ? (
+                visibleEntries.map((entry) => {
                   const kind = entry.is_dir
                     ? "Folder"
                     : entry.name.toLowerCase().endsWith(".pdf")
@@ -636,6 +745,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                       className={`content-row ${selectedEntry?.relative_path === entry.relative_path ? "content-row--selected" : ""}`}
                       type="button"
                       onClick={() => {
+                        setSelectedPaths([entry.relative_path]);
                         void openEntry(entry);
                       }}
                       onDoubleClick={() => {
@@ -653,6 +763,23 @@ export function DesktopApp({ mode }: DesktopAppProps) {
                         void openEntry(entry);
                       }}
                     >
+                      <span>
+                        <input
+                          aria-label={`Select ${entry.name}`}
+                          type="checkbox"
+                          checked={selectedPaths.includes(entry.relative_path)}
+                          onChange={() => {
+                            setSelectedPaths((current) =>
+                              current.includes(entry.relative_path)
+                                ? current.filter(
+                                    (path) => path !== entry.relative_path,
+                                  )
+                                : [...current, entry.relative_path],
+                            );
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      </span>
                       <span className="content-row__name">
                         <span className="content-row__badge">{kind}</span>
                         <span>
@@ -681,6 +808,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             device={device}
             drawerView={drawerView}
             selectedEntryDetails={selectedEntryDetails}
+            modelLabel={modelLabel}
             onClose={() => setDrawerView({ kind: "closed" })}
             onReveal={() => void revealSelected()}
             onExport={() => void exportSelected()}
@@ -719,6 +847,7 @@ function DetailsDrawer({
   device,
   drawerView,
   selectedEntryDetails,
+  modelLabel,
   checkedAt,
   onClose,
   onReveal,
@@ -727,6 +856,7 @@ function DetailsDrawer({
   device: ReaderState;
   drawerView: DrawerView;
   selectedEntryDetails: ReaderEntryDetails | null;
+  modelLabel: string;
   checkedAt: string | null;
   onClose: () => void;
   onReveal: () => void;
@@ -742,9 +872,7 @@ function DetailsDrawer({
         <div>
           <p className="eyebrow">Details</p>
           <h3>
-            {drawerView.kind === "device"
-              ? device.model || "Sony Reader"
-              : drawerView.entry.name}
+            {drawerView.kind === "device" ? modelLabel : drawerView.entry.name}
           </h3>
         </div>
         <button className="secondary" type="button" onClick={onClose}>
@@ -753,7 +881,7 @@ function DetailsDrawer({
       </div>
       {drawerView.kind === "device" ? (
         <div className="details-drawer__body">
-          <DetailItem label="Model" value={device.model || "Unknown"} />
+          <DetailItem label="Model" value={modelLabel || "Unknown"} />
           <DetailItem
             label="Reader volume"
             value={device.reader_path || "Unavailable"}

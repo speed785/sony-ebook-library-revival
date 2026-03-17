@@ -5,14 +5,6 @@ export function Website() {
     <main className="site-shell">
       <section className="site-hero">
         <div className="site-hero__copy">
-          <div className="hero__badge-wrap hero__badge-wrap--site">
-            <img
-              className="hero__brand"
-              src={assetUrl("brand-mark.svg")}
-              alt="Sony eBook Library Revival icon"
-            />
-            <div className="hero__badge">macOS app</div>
-          </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
             A modern desktop app for classic Sony Readers. It keeps local book

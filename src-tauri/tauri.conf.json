@@ -13,9 +13,12 @@
     "windows": [
       {
         "title": "Setup eBook Library Revival",
-        "width": 1340,
-        "height": 920,
-        "resizable": true,
+        "width": 1640,
+        "height": 1040,
+        "minWidth": 1640,
+        "minHeight": 1040,
+        "center": true,
+        "resizable": false,
         "fullscreen": false
       }
     ],

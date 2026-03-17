@@ -47,7 +47,7 @@ The desktop app has real device access. The website is intentionally information
 - Web favicon: `public/brand-mark.svg`
 - Desktop app icon source: `src-tauri/icons/icon.png`
 - Desktop app bundle icon set: `src-tauri/icons/icon.icns`
-- In-app brand mark: reused in the hero header so the app and docs share the same identity
+- The icon system is shared across the app, website, and docs
 
 Regenerate the macOS icon set with:
 

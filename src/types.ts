@@ -11,6 +11,10 @@ export type ReaderState = {
   total_bytes: number | null;
   free_bytes: number | null;
   used_bytes: number | null;
+  volume_name: string | null;
+  filesystem_type: string | null;
+  filesystem_name: string | null;
+  mounted_volumes: number;
 };
 
 export type ReaderEntry = {

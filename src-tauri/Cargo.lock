@@ -3071,6 +3071,7 @@ dependencies = [
 name = "sony-ebook-library-revival"
 version = "0.1.0"
 dependencies = [
+ "plist",
  "serde",
  "tauri",
  "tauri-build",

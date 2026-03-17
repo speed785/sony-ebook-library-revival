@@ -1,11 +1,9 @@
+use plist::Value;
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::time::UNIX_EPOCH;
-
-const READER_ROOT: &str = "/Volumes/READER";
-const LAUNCHER_ROOT: &str = "/Volumes/LAUNCHER";
 
 type DiskInfo = (
     Option<String>,
@@ -14,6 +12,25 @@ type DiskInfo = (
     Option<u64>,
     Option<u64>,
 );
+
+#[derive(Clone)]
+struct DetectedVolume {
+    mount_point: String,
+    volume_name: Option<String>,
+    media_name: Option<String>,
+    filesystem_type: Option<String>,
+    filesystem_name: Option<String>,
+    total_bytes: Option<u64>,
+    free_bytes: Option<u64>,
+    role: VolumeRole,
+}
+
+#[derive(Clone, PartialEq)]
+enum VolumeRole {
+    Reader,
+    Launcher,
+    Unknown,
+}
 
 #[derive(Serialize)]
 struct ReaderState {
@@ -29,6 +46,10 @@ struct ReaderState {
     total_bytes: Option<u64>,
     free_bytes: Option<u64>,
     used_bytes: Option<u64>,
+    volume_name: Option<String>,
+    filesystem_type: Option<String>,
+    filesystem_name: Option<String>,
+    mounted_volumes: usize,
 }
 
 #[derive(Serialize)]
@@ -56,14 +77,31 @@ struct ReaderEntryDetails {
 
 #[tauri::command]
 fn get_reader_state() -> Result<ReaderState, String> {
-    let reader_path = Path::new(READER_ROOT);
-    let launcher_path = Path::new(LAUNCHER_ROOT);
+    let volumes = discover_reader_volumes()?;
+    let reader_volume = volumes
+        .iter()
+        .find(|volume| volume.role == VolumeRole::Reader);
+    let launcher_volume = volumes
+        .iter()
+        .find(|volume| volume.role == VolumeRole::Launcher);
 
-    let (model, total_space, free_space, total_bytes, free_bytes) = if reader_path.exists() {
-        parse_diskutil_info(READER_ROOT)
-    } else {
-        (None, None, None, None, None)
-    };
+    let (model, total_space, free_space, total_bytes, free_bytes) =
+        if let Some(reader_volume) = reader_volume {
+            let disk_info = parse_diskutil_info(&reader_volume.mount_point);
+            (
+                disk_info.0.or_else(|| reader_volume.media_name.clone()),
+                disk_info
+                    .1
+                    .or_else(|| reader_volume.total_bytes.map(format_bytes)),
+                disk_info
+                    .2
+                    .or_else(|| reader_volume.free_bytes.map(format_bytes)),
+                disk_info.3.or(reader_volume.total_bytes),
+                disk_info.4.or(reader_volume.free_bytes),
+            )
+        } else {
+            (None, None, None, None, None)
+        };
 
     let used_bytes = total_bytes
         .zip(free_bytes)
@@ -72,10 +110,10 @@ fn get_reader_state() -> Result<ReaderState, String> {
 
     Ok(ReaderState {
         desktop: true,
-        reader_available: reader_path.exists(),
-        launcher_available: launcher_path.exists(),
-        reader_path: path_if_exists(reader_path),
-        launcher_path: path_if_exists(launcher_path),
+        reader_available: reader_volume.is_some(),
+        launcher_available: launcher_volume.is_some(),
+        reader_path: reader_volume.map(|volume| volume.mount_point.clone()),
+        launcher_path: launcher_volume.map(|volume| volume.mount_point.clone()),
         model,
         total_space,
         free_space,
@@ -83,6 +121,10 @@ fn get_reader_state() -> Result<ReaderState, String> {
         total_bytes,
         free_bytes,
         used_bytes,
+        volume_name: reader_volume.and_then(|volume| volume.volume_name.clone()),
+        filesystem_type: reader_volume.and_then(|volume| volume.filesystem_type.clone()),
+        filesystem_name: reader_volume.and_then(|volume| volume.filesystem_name.clone()),
+        mounted_volumes: volumes.len(),
     })
 }
 
@@ -100,7 +142,7 @@ fn list_reader_entries(relative_path: String) -> Result<Vec<ReaderEntry>, String
         let name = entry.file_name().to_string_lossy().to_string();
         let absolute_path = path.to_string_lossy().to_string();
         let relative = path
-            .strip_prefix(READER_ROOT)
+            .strip_prefix(reader_root_path()?)
             .map_err(|error| error.to_string())?
             .to_string_lossy()
             .trim_start_matches('/')
@@ -162,7 +204,8 @@ fn get_reader_entry_details(relative_path: String) -> Result<ReaderEntryDetails,
 
 #[tauri::command]
 fn search_reader_entries(query: String) -> Result<Vec<ReaderEntry>, String> {
-    let root = Path::new(READER_ROOT);
+    let root_path = reader_root_path()?;
+    let root = Path::new(&root_path);
     if !root.exists() {
         return Ok(Vec::new());
     }
@@ -235,7 +278,7 @@ fn reveal_in_finder(absolute_path: String) -> Result<(), String> {
 }
 
 fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
-    let mut path = PathBuf::from(READER_ROOT);
+    let mut path = PathBuf::from(reader_root_path()?);
 
     for component in Path::new(relative_path).components() {
         match component {
@@ -248,6 +291,148 @@ fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+fn reader_root_path() -> Result<String, String> {
+    discover_reader_volumes()?
+        .into_iter()
+        .find(|volume| volume.role == VolumeRole::Reader)
+        .map(|volume| volume.mount_point)
+        .ok_or_else(|| "No mounted Sony Reader volume found".to_string())
+}
+
+fn discover_reader_volumes() -> Result<Vec<DetectedVolume>, String> {
+    let output = Command::new("diskutil")
+        .args(["list", "-plist", "external"])
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let plist =
+        Value::from_reader_xml(output.stdout.as_slice()).map_err(|error| error.to_string())?;
+    let Some(dict) = plist.as_dictionary() else {
+        return Ok(Vec::new());
+    };
+
+    let mut identifiers = Vec::new();
+    if let Some(entries) = dict.get("AllDisksAndPartitions").and_then(Value::as_array) {
+        for entry in entries {
+            collect_disk_identifiers(entry, &mut identifiers);
+        }
+    }
+
+    let mut volumes = Vec::new();
+    for identifier in identifiers {
+        if let Some(volume) = read_volume_info(&identifier)? {
+            volumes.push(volume);
+        }
+    }
+
+    if volumes
+        .iter()
+        .all(|volume| volume.role != VolumeRole::Reader)
+    {
+        if let Some(first_non_launcher) = volumes
+            .iter_mut()
+            .find(|volume| volume.role != VolumeRole::Launcher)
+        {
+            first_non_launcher.role = VolumeRole::Reader;
+        }
+    }
+
+    Ok(volumes)
+}
+
+fn collect_disk_identifiers(value: &Value, output: &mut Vec<String>) {
+    let Some(dict) = value.as_dictionary() else {
+        return;
+    };
+
+    if let Some(identifier) = dict.get("DeviceIdentifier").and_then(Value::as_string) {
+        output.push(identifier.to_string());
+    }
+
+    if let Some(children) = dict.get("Partitions").and_then(Value::as_array) {
+        for child in children {
+            collect_disk_identifiers(child, output);
+        }
+    }
+}
+
+fn read_volume_info(identifier: &str) -> Result<Option<DetectedVolume>, String> {
+    let output = Command::new("diskutil")
+        .args(["info", "-plist", identifier])
+        .output()
+        .map_err(|error| error.to_string())?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let plist =
+        Value::from_reader_xml(output.stdout.as_slice()).map_err(|error| error.to_string())?;
+    let Some(dict) = plist.as_dictionary() else {
+        return Ok(None);
+    };
+
+    let mount_point = dict
+        .get("MountPoint")
+        .and_then(Value::as_string)
+        .map(str::to_string);
+    let bus_protocol = dict
+        .get("BusProtocol")
+        .and_then(Value::as_string)
+        .map(str::to_string);
+
+    if mount_point.is_none() || bus_protocol.as_deref() != Some("USB") {
+        return Ok(None);
+    }
+
+    let volume_name = dict
+        .get("VolumeName")
+        .and_then(Value::as_string)
+        .map(str::to_string);
+    let media_name = dict
+        .get("MediaName")
+        .and_then(Value::as_string)
+        .map(str::to_string);
+    let role = infer_volume_role(volume_name.as_deref(), media_name.as_deref());
+
+    Ok(Some(DetectedVolume {
+        mount_point: mount_point.unwrap_or_default(),
+        volume_name,
+        media_name,
+        filesystem_type: dict
+            .get("FilesystemType")
+            .and_then(Value::as_string)
+            .map(str::to_string),
+        filesystem_name: dict
+            .get("FilesystemName")
+            .and_then(Value::as_string)
+            .map(str::to_string),
+        total_bytes: dict.get("TotalSize").and_then(Value::as_unsigned_integer),
+        free_bytes: dict.get("FreeSpace").and_then(Value::as_unsigned_integer),
+        role,
+    }))
+}
+
+fn infer_volume_role(volume_name: Option<&str>, media_name: Option<&str>) -> VolumeRole {
+    let combined = format!(
+        "{} {}",
+        volume_name.unwrap_or_default().to_lowercase(),
+        media_name.unwrap_or_default().to_lowercase()
+    );
+
+    if combined.contains("launcher") {
+        VolumeRole::Launcher
+    } else if combined.contains("reader") || combined.contains("prs") || combined.contains("sony") {
+        VolumeRole::Reader
+    } else {
+        VolumeRole::Unknown
+    }
+}
+
 fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> Result<(), String> {
     for item in fs::read_dir(path).map_err(|error| error.to_string())? {
         let entry = item.map_err(|error| error.to_string())?;
@@ -257,7 +442,7 @@ fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> 
 
         if name.to_lowercase().contains(query) {
             let relative_path = entry_path
-                .strip_prefix(READER_ROOT)
+                .strip_prefix(reader_root_path()?)
                 .map_err(|error| error.to_string())?
                 .to_string_lossy()
                 .trim_start_matches('/')
@@ -341,10 +526,6 @@ fn format_bytes(value: u64) -> String {
     } else {
         format!("{:.2} GB", value_f / GB)
     }
-}
-
-fn path_if_exists(path: &Path) -> Option<String> {
-    path.exists().then(|| path.to_string_lossy().to_string())
 }
 
 fn main() {
