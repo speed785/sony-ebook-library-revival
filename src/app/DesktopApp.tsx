@@ -1,0 +1,734 @@
+import { useEffect, useMemo, useState } from "react";
+import Tree from "rc-tree";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open, save } from "@tauri-apps/plugin-dialog";
+
+import type { AppMode, DrawerView, ReaderEntry, ReaderState } from "../types";
+import { breadcrumbParts, formatBytes } from "../utils";
+
+type TreeNode = {
+  key: string;
+  title: string;
+  isLeaf?: boolean;
+  children?: TreeNode[];
+};
+
+type DesktopAppProps = {
+  mode: AppMode;
+};
+
+const previewDevice: ReaderState = {
+  desktop: true,
+  reader_available: true,
+  launcher_available: true,
+  reader_path: "/Volumes/READER",
+  launcher_path: "/Volumes/LAUNCHER",
+  model: "PRS-300",
+  total_space: "465.0 MB",
+  free_space: "445.1 MB",
+  used_space: "19.9 MB",
+  total_bytes: 487587840,
+  free_bytes: 466721792,
+  used_bytes: 20866048,
+};
+
+const previewEntries: Record<string, ReaderEntry[]> = {
+  "": [
+    {
+      name: "Digital Editions",
+      relative_path: "Digital Editions",
+      absolute_path: "/Volumes/READER/Digital Editions",
+      is_dir: true,
+      size: 0,
+    },
+    {
+      name: "Documents",
+      relative_path: "Documents",
+      absolute_path: "/Volumes/READER/Documents",
+      is_dir: true,
+      size: 0,
+    },
+    {
+      name: "database",
+      relative_path: "database",
+      absolute_path: "/Volumes/READER/database",
+      is_dir: true,
+      size: 0,
+    },
+  ],
+  Documents: [
+    {
+      name: "Collections",
+      relative_path: "Documents/Collections",
+      absolute_path: "/Volumes/READER/Documents/Collections",
+      is_dir: true,
+      size: 0,
+    },
+    {
+      name: "The Left Hand of Darkness.epub",
+      relative_path: "Documents/The Left Hand of Darkness.epub",
+      absolute_path: "/Volumes/READER/Documents/The Left Hand of Darkness.epub",
+      is_dir: false,
+      size: 1468006,
+    },
+    {
+      name: "Piranesi.epub",
+      relative_path: "Documents/Piranesi.epub",
+      absolute_path: "/Volumes/READER/Documents/Piranesi.epub",
+      is_dir: false,
+      size: 841212,
+    },
+    {
+      name: "Essays.pdf",
+      relative_path: "Documents/Essays.pdf",
+      absolute_path: "/Volumes/READER/Documents/Essays.pdf",
+      is_dir: false,
+      size: 2860081,
+    },
+  ],
+  "Documents/Collections": [
+    {
+      name: "Fiction",
+      relative_path: "Documents/Collections/Fiction",
+      absolute_path: "/Volumes/READER/Documents/Collections/Fiction",
+      is_dir: true,
+      size: 0,
+    },
+  ],
+  "Digital Editions": [],
+  database: [],
+};
+
+export function DesktopApp({ mode }: DesktopAppProps) {
+  const canUseNativeBridge = mode === "live" && "__TAURI_INTERNALS__" in window;
+  const [device, setDevice] = useState<ReaderState>({
+    desktop: mode === "live",
+    reader_available: false,
+    launcher_available: false,
+    reader_path: null,
+    launcher_path: null,
+    model: null,
+    total_space: null,
+    free_space: null,
+    used_space: null,
+    total_bytes: null,
+    free_bytes: null,
+    used_bytes: null,
+  });
+  const [status, setStatus] = useState("Looking for a connected reader");
+  const [currentDir, setCurrentDir] = useState("");
+  const [entries, setEntries] = useState<ReaderEntry[]>([]);
+  const [selectedEntry, setSelectedEntry] = useState<ReaderEntry | null>(null);
+  const [drawerView, setDrawerView] = useState<DrawerView>({ kind: "closed" });
+  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    void refreshDevice();
+  }, []);
+
+  useEffect(() => {
+    if (!canUseNativeBridge) {
+      return;
+    }
+
+    const webview = getCurrentWebview();
+    let unlisten: (() => void) | undefined;
+
+    void webview
+      .onDragDropEvent(async (event) => {
+        if (event.payload.type === "over") {
+          document.body.classList.add("drag-target-active");
+          return;
+        }
+
+        if (event.payload.type === "leave") {
+          document.body.classList.remove("drag-target-active");
+          return;
+        }
+
+        document.body.classList.remove("drag-target-active");
+        const paths = event.payload.paths;
+        if (paths.length === 0 || !device.reader_available) {
+          return;
+        }
+
+        await copyIntoReader(paths);
+      })
+      .then((listener) => {
+        unlisten = listener;
+      });
+
+    return () => {
+      document.body.classList.remove("drag-target-active");
+      unlisten?.();
+    };
+  }, [canUseNativeBridge, currentDir, device.reader_available, mode]);
+
+  async function refreshDevice() {
+    setStatus("Checking mounted Sony volumes");
+    setCheckedAt(
+      new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+    );
+
+    if (mode === "preview") {
+      setDevice(previewDevice);
+      setStatus("Reader connected");
+      await loadDirectory("Documents", previewDevice, true);
+      return;
+    }
+
+    if (!canUseNativeBridge) {
+      setStatus("Connect a Sony Reader to view live device information");
+      setDevice((current) => ({ ...current, reader_available: false }));
+      return;
+    }
+
+    try {
+      const nextState = await invoke<ReaderState>("get_reader_state");
+      setDevice(nextState);
+
+      if (!nextState.reader_available) {
+        setStatus("No reader connected");
+        setCurrentDir("");
+        setEntries([]);
+        setTreeNodes([]);
+        setSelectedEntry(null);
+        setDrawerView({ kind: "closed" });
+        return;
+      }
+
+      setStatus(`Connected to ${nextState.model || "Sony Reader"}`);
+      await loadDirectory("", nextState, false);
+    } catch (error) {
+      setStatus(`Device check failed: ${String(error)}`);
+    }
+  }
+
+  async function listEntries(path: string): Promise<ReaderEntry[]> {
+    if (mode === "preview") {
+      return previewEntries[path] || [];
+    }
+
+    return invoke<ReaderEntry[]>("list_reader_entries", { relativePath: path });
+  }
+
+  async function loadDirectory(
+    path: string,
+    state: ReaderState,
+    preferDocuments: boolean,
+  ) {
+    if (!state.reader_available) {
+      return;
+    }
+
+    const targetPath = preferDocuments
+      ? path
+      : path || (await resolveInitialPath());
+    const nextEntries = await listEntries(targetPath);
+    setCurrentDir(targetPath);
+    setEntries(nextEntries);
+    setSelectedEntry(null);
+    setDrawerView({ kind: "closed" });
+
+    const roots = await listEntries("");
+    const rootNodes = roots.filter((entry) => entry.is_dir).map(toTreeNode);
+    setTreeNodes(rootNodes);
+    setExpandedKeys(
+      targetPath
+        ? targetPath.split("/").reduce<string[]>((acc, _, index, arr) => {
+            const key = arr.slice(0, index + 1).join("/");
+            acc.push(key);
+            return acc;
+          }, [])
+        : [],
+    );
+  }
+
+  async function resolveInitialPath() {
+    const rootEntries = await listEntries("");
+    const preferred = rootEntries.find(
+      (entry) => entry.name === "Documents" && entry.is_dir,
+    );
+    if (preferred) {
+      return preferred.relative_path;
+    }
+
+    return rootEntries.find((entry) => entry.is_dir)?.relative_path || "";
+  }
+
+  async function loadTreeChildren(nodeKey: string) {
+    const children = (await listEntries(nodeKey))
+      .filter((entry) => entry.is_dir)
+      .map(toTreeNode);
+    setTreeNodes((current) => updateTreeChildren(current, nodeKey, children));
+  }
+
+  async function copyIntoReader(sourcePaths: string[]) {
+    setStatus(
+      `Copying ${sourcePaths.length} file${sourcePaths.length === 1 ? "" : "s"} to the reader`,
+    );
+    await invoke("copy_files_to_reader", {
+      sourcePaths,
+      targetRelativeDir: currentDir,
+    });
+    await loadDirectory(currentDir, device, mode === "preview");
+    setStatus(
+      `Imported ${sourcePaths.length} item${sourcePaths.length === 1 ? "" : "s"}`,
+    );
+  }
+
+  async function importFromDisk() {
+    if (!canUseNativeBridge || !device.reader_available) {
+      return;
+    }
+
+    const selected = await open({
+      multiple: true,
+      filters: [{ name: "Books", extensions: ["epub", "pdf", "txt"] }],
+    });
+
+    if (!selected) {
+      return;
+    }
+
+    const paths = Array.isArray(selected) ? selected : [selected];
+    await copyIntoReader(paths);
+  }
+
+  async function exportSelected() {
+    if (!selectedEntry || selectedEntry.is_dir || !canUseNativeBridge) {
+      return;
+    }
+
+    const destination = await save({ defaultPath: selectedEntry.name });
+    if (!destination) {
+      return;
+    }
+
+    await invoke("export_reader_file", {
+      relativePath: selectedEntry.relative_path,
+      destinationPath: destination,
+    });
+
+    setStatus(`Exported ${selectedEntry.name}`);
+  }
+
+  async function revealSelected() {
+    if (!selectedEntry || !canUseNativeBridge) {
+      return;
+    }
+
+    await invoke("reveal_in_finder", {
+      absolutePath: selectedEntry.absolute_path,
+    });
+    setStatus(`Revealed ${selectedEntry.name} in Finder`);
+  }
+
+  const usagePercent = useMemo(() => {
+    if (!device.total_bytes || !device.used_bytes) {
+      return 0;
+    }
+
+    return Math.round((device.used_bytes / device.total_bytes) * 100);
+  }, [device.total_bytes, device.used_bytes]);
+
+  const breadcrumbs = breadcrumbParts(currentDir);
+  const drawerOpen = drawerView.kind !== "closed";
+
+  return (
+    <main className="app-shell">
+      <header className="app-topbar">
+        <div>
+          <p className="eyebrow">Sony eBook Library Revival</p>
+          <h1>Reader manager</h1>
+        </div>
+        <div className="topbar-actions">
+          <button
+            className="secondary"
+            onClick={() => void refreshDevice()}
+            type="button"
+          >
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      <section
+        className="device-banner"
+        onClick={() => setDrawerView({ kind: "device" })}
+      >
+        <div
+          className={`device-pill ${device.reader_available ? "device-pill--connected" : "device-pill--disconnected"}`}
+        >
+          {device.reader_available ? "Connected" : "Waiting for device"}
+        </div>
+        <div className="device-banner__primary">
+          <strong>
+            {device.reader_available
+              ? device.model || "Sony Reader"
+              : "Connect a Sony Reader over USB"}
+          </strong>
+          <span>{status}</span>
+        </div>
+        <div className="device-banner__stats">
+          <div>
+            <label>Free</label>
+            <span>{device.free_space || "--"}</span>
+          </div>
+          <div>
+            <label>Used</label>
+            <span>{device.used_space || "--"}</span>
+          </div>
+          <div>
+            <label>Battery</label>
+            <span>Unavailable</span>
+          </div>
+        </div>
+        <div className="device-banner__meter">
+          <div
+            className="device-banner__meter-fill"
+            style={{ width: `${usagePercent}%` }}
+          />
+        </div>
+      </section>
+
+      {!device.reader_available ? (
+        <DisconnectedState onRefresh={() => void refreshDevice()} />
+      ) : (
+        <div
+          className={`workspace ${drawerOpen ? "workspace--drawer-open" : ""}`}
+        >
+          <aside className="workspace__nav">
+            <div className="nav-card">
+              <p className="eyebrow">Reader</p>
+              <button
+                className="nav-card__device"
+                type="button"
+                onClick={() => setDrawerView({ kind: "device" })}
+              >
+                <div>
+                  <strong>{device.model || "Sony Reader"}</strong>
+                  <span>{device.reader_path || "Mounted volume"}</span>
+                </div>
+                <span>
+                  {device.launcher_available ? "2 volumes" : "1 volume"}
+                </span>
+              </button>
+            </div>
+            <div className="nav-card nav-card--tree">
+              <p className="eyebrow">Library tree</p>
+              <Tree
+                className="reader-tree"
+                treeData={treeNodes}
+                expandedKeys={expandedKeys}
+                selectedKeys={[currentDir]}
+                onExpand={(keys, info) => {
+                  setExpandedKeys(keys as string[]);
+                  if (info.expanded) {
+                    void loadTreeChildren(String(info.node.key));
+                  }
+                }}
+                onSelect={(keys, info) => {
+                  const key = String(keys[0] || info.node.key || "");
+                  if (!key) {
+                    return;
+                  }
+
+                  setCurrentDir(key);
+                  void loadDirectory(key, device, mode === "preview");
+                }}
+              />
+            </div>
+          </aside>
+
+          <section className="workspace__main">
+            <div className="content-header">
+              <div>
+                <div className="breadcrumbs">
+                  {breadcrumbs.map((part, index) => (
+                    <button
+                      key={part.path || "root"}
+                      className="breadcrumb"
+                      type="button"
+                      onClick={() =>
+                        void loadDirectory(
+                          part.path,
+                          device,
+                          mode === "preview",
+                        )
+                      }
+                    >
+                      {part.label}
+                      {index < breadcrumbs.length - 1 ? <span>/</span> : null}
+                    </button>
+                  ))}
+                </div>
+                <h2>
+                  {breadcrumbs[breadcrumbs.length - 1]?.label || "Reader"}
+                </h2>
+              </div>
+              <div className="content-actions">
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => void importFromDisk()}
+                  disabled={!canUseNativeBridge}
+                >
+                  Import books
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() =>
+                    setDrawerView(
+                      selectedEntry
+                        ? { kind: "entry", entry: selectedEntry }
+                        : { kind: "device" },
+                    )
+                  }
+                  disabled={!selectedEntry}
+                >
+                  Details
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={() => void exportSelected()}
+                  disabled={
+                    !selectedEntry ||
+                    selectedEntry.is_dir ||
+                    !canUseNativeBridge
+                  }
+                >
+                  Export
+                </button>
+              </div>
+            </div>
+
+            <div className="content-list">
+              <div className="content-list__header">
+                <span>Item</span>
+                <span>Type</span>
+                <span>Size</span>
+              </div>
+              {entries.length ? (
+                entries.map((entry) => {
+                  const kind = entry.is_dir
+                    ? "Folder"
+                    : entry.name.toLowerCase().endsWith(".pdf")
+                      ? "PDF"
+                      : entry.name.toLowerCase().endsWith(".epub")
+                        ? "EPUB"
+                        : "File";
+                  return (
+                    <button
+                      key={entry.relative_path}
+                      className={`content-row ${selectedEntry?.relative_path === entry.relative_path ? "content-row--selected" : ""}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedEntry(entry);
+                      }}
+                      onDoubleClick={() => {
+                        if (entry.is_dir) {
+                          void loadDirectory(
+                            entry.relative_path,
+                            device,
+                            mode === "preview",
+                          );
+                          return;
+                        }
+
+                        setDrawerView({ kind: "entry", entry });
+                      }}
+                    >
+                      <span className="content-row__name">
+                        <span className="content-row__badge">{kind}</span>
+                        <span>
+                          <strong>
+                            {entry.name.replace(/\.(epub|pdf)$/i, "")}
+                          </strong>
+                          <small>{entry.relative_path}</small>
+                        </span>
+                      </span>
+                      <span>{entry.is_dir ? "Folder" : kind}</span>
+                      <span>
+                        {entry.is_dir ? "--" : formatBytes(entry.size)}
+                      </span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="empty-list">This folder is empty.</div>
+              )}
+            </div>
+          </section>
+
+          <DetailsDrawer
+            checkedAt={checkedAt}
+            device={device}
+            drawerView={drawerView}
+            onClose={() => setDrawerView({ kind: "closed" })}
+            onReveal={() => void revealSelected()}
+            onExport={() => void exportSelected()}
+          />
+        </div>
+      )}
+    </main>
+  );
+}
+
+function DisconnectedState({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <section className="disconnected-state">
+      <div className="disconnected-state__art" aria-hidden="true">
+        <div className="device-illustration">
+          <div className="device-illustration__screen" />
+        </div>
+      </div>
+      <div className="disconnected-state__copy">
+        <p className="eyebrow">Waiting for a reader</p>
+        <h2>Connect your Sony Reader to begin.</h2>
+        <p>
+          Plug the device in over USB to browse its library, move books, and see
+          storage details. Live information only appears when a reader is
+          mounted on your Mac.
+        </p>
+        <button className="primary" type="button" onClick={onRefresh}>
+          Refresh device
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function DetailsDrawer({
+  device,
+  drawerView,
+  checkedAt,
+  onClose,
+  onReveal,
+  onExport,
+}: {
+  device: ReaderState;
+  drawerView: DrawerView;
+  checkedAt: string | null;
+  onClose: () => void;
+  onReveal: () => void;
+  onExport: () => void;
+}) {
+  if (drawerView.kind === "closed") {
+    return null;
+  }
+
+  return (
+    <aside className="details-drawer">
+      <div className="details-drawer__header">
+        <div>
+          <p className="eyebrow">Details</p>
+          <h3>
+            {drawerView.kind === "device"
+              ? device.model || "Sony Reader"
+              : drawerView.entry.name}
+          </h3>
+        </div>
+        <button className="secondary" type="button" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {drawerView.kind === "device" ? (
+        <div className="details-drawer__body">
+          <DetailItem label="Model" value={device.model || "Unknown"} />
+          <DetailItem
+            label="Reader volume"
+            value={device.reader_path || "Unavailable"}
+          />
+          <DetailItem
+            label="Launcher volume"
+            value={
+              device.launcher_available
+                ? device.launcher_path || "Mounted"
+                : "Not mounted"
+            }
+          />
+          <DetailItem
+            label="Free space"
+            value={device.free_space || "Unavailable"}
+          />
+          <DetailItem
+            label="Used space"
+            value={device.used_space || "Unavailable"}
+          />
+          <DetailItem label="Last refresh" value={checkedAt || "Just now"} />
+        </div>
+      ) : (
+        <div className="details-drawer__body">
+          <DetailItem label="Name" value={drawerView.entry.name} />
+          <DetailItem label="Path" value={drawerView.entry.relative_path} />
+          <DetailItem
+            label="Type"
+            value={drawerView.entry.is_dir ? "Folder" : "Document"}
+          />
+          <DetailItem
+            label="Size"
+            value={
+              drawerView.entry.is_dir
+                ? "--"
+                : formatBytes(drawerView.entry.size)
+            }
+          />
+          <div className="details-drawer__actions">
+            <button className="secondary" type="button" onClick={onReveal}>
+              Reveal in Finder
+            </button>
+            {!drawerView.entry.is_dir ? (
+              <button className="primary" type="button" onClick={onExport}>
+                Export file
+              </button>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function toTreeNode(entry: ReaderEntry): TreeNode {
+  return {
+    key: entry.relative_path,
+    title: entry.name,
+    isLeaf: false,
+  };
+}
+
+function updateTreeChildren(
+  nodes: TreeNode[],
+  key: string,
+  children: TreeNode[],
+): TreeNode[] {
+  return nodes.map((node) => {
+    if (node.key === key) {
+      return { ...node, children };
+    }
+
+    if (node.children) {
+      return {
+        ...node,
+        children: updateTreeChildren(node.children, key, children),
+      };
+    }
+
+    return node;
+  });
+}

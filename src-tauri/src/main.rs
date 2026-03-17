@@ -6,6 +6,14 @@ use std::process::Command;
 const READER_ROOT: &str = "/Volumes/READER";
 const LAUNCHER_ROOT: &str = "/Volumes/LAUNCHER";
 
+type DiskInfo = (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<u64>,
+    Option<u64>,
+);
+
 #[derive(Serialize)]
 struct ReaderState {
     desktop: bool,
@@ -16,6 +24,10 @@ struct ReaderState {
     model: Option<String>,
     total_space: Option<String>,
     free_space: Option<String>,
+    used_space: Option<String>,
+    total_bytes: Option<u64>,
+    free_bytes: Option<u64>,
+    used_bytes: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -32,11 +44,16 @@ fn get_reader_state() -> Result<ReaderState, String> {
     let reader_path = Path::new(READER_ROOT);
     let launcher_path = Path::new(LAUNCHER_ROOT);
 
-    let (model, total_space, free_space) = if reader_path.exists() {
+    let (model, total_space, free_space, total_bytes, free_bytes) = if reader_path.exists() {
         parse_diskutil_info(READER_ROOT)
     } else {
-        (None, None, None)
+        (None, None, None, None, None)
     };
+
+    let used_bytes = total_bytes
+        .zip(free_bytes)
+        .map(|(total, free)| total.saturating_sub(free));
+    let used_space = used_bytes.map(format_bytes);
 
     Ok(ReaderState {
         desktop: true,
@@ -47,6 +64,10 @@ fn get_reader_state() -> Result<ReaderState, String> {
         model,
         total_space,
         free_space,
+        used_space,
+        total_bytes,
+        free_bytes,
+        used_bytes,
     })
 }
 
@@ -153,19 +174,21 @@ fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn parse_diskutil_info(path: &str) -> (Option<String>, Option<String>, Option<String>) {
+fn parse_diskutil_info(path: &str) -> DiskInfo {
     let output = Command::new("diskutil").args(["info", path]).output();
 
     let Ok(output) = output else {
-        return (None, None, None);
+        return (None, None, None, None, None);
     };
 
     let text = String::from_utf8_lossy(&output.stdout);
     let model = parse_diskutil_value(&text, "Device / Media Name:");
     let total_space = parse_diskutil_value(&text, "Volume Total Space:");
     let free_space = parse_diskutil_value(&text, "Volume Free Space:");
+    let total_bytes = parse_diskutil_bytes(&text, "Volume Total Space:");
+    let free_bytes = parse_diskutil_bytes(&text, "Volume Free Space:");
 
-    (model, total_space, free_space)
+    (model, total_space, free_space, total_bytes, free_bytes)
 }
 
 fn parse_diskutil_value(text: &str, key: &str) -> Option<String> {
@@ -175,6 +198,31 @@ fn parse_diskutil_value(text: &str, key: &str) -> Option<String> {
                 .filter(|(name, _)| name.trim() == key.trim())
         })
         .map(|(_, value)| value.trim().to_string())
+}
+
+fn parse_diskutil_bytes(text: &str, key: &str) -> Option<u64> {
+    parse_diskutil_value(text, key).and_then(|value| {
+        let first_token = value.split_whitespace().next()?;
+        first_token.replace(',', "").parse::<u64>().ok()
+    })
+}
+
+fn format_bytes(value: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = KB * 1024.0;
+    const GB: f64 = MB * 1024.0;
+
+    let value_f = value as f64;
+
+    if value_f < KB {
+        format!("{} B", value)
+    } else if value_f < MB {
+        format!("{:.1} KB", value_f / KB)
+    } else if value_f < GB {
+        format!("{:.1} MB", value_f / MB)
+    } else {
+        format!("{:.2} GB", value_f / GB)
+    }
 }
 
 fn path_if_exists(path: &Path) -> Option<String> {

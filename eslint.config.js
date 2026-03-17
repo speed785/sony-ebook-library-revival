@@ -15,7 +15,7 @@ export default [
     },
   },
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parser,
       parserOptions: {
@@ -29,12 +29,17 @@ export default [
         HTMLElement: "readonly",
         HTMLInputElement: "readonly",
         HTMLButtonElement: "readonly",
+        URLSearchParams: "readonly",
         Event: "readonly",
         DragEvent: "readonly",
         File: "readonly",
         FileList: "readonly",
+        KeyboardEvent: "readonly",
         console: "readonly",
         setTimeout: "readonly",
+        describe: "readonly",
+        it: "readonly",
+        expect: "readonly",
       },
     },
     plugins: {

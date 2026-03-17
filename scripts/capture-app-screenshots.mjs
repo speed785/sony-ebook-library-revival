@@ -32,10 +32,10 @@ try {
     waitUntil: "networkidle",
   });
   await page
-    .locator(".window")
+    .locator(".app-shell")
     .screenshot({ path: path.join(outputDir, "app-overview.png") });
   await page
-    .locator(".card--workspace")
+    .locator(".workspace__main")
     .screenshot({ path: path.join(outputDir, "app-library.png") });
 
   await browser.close();
