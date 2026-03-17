@@ -2,12 +2,47 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use plist::Value;
 use roxmltree::Document;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use std::time::UNIX_EPOCH;
 use zip::ZipArchive;
+
+// ---------------------------------------------------------------------------
+// Session-level caches
+// ---------------------------------------------------------------------------
+
+/// Cached reader mount path — populated on first successful detection,
+/// cleared only when the user triggers an explicit refresh.
+static READER_PATH_CACHE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn reader_path_cache() -> &'static Mutex<Option<String>> {
+    READER_PATH_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+/// Cached EPUB titles — keyed by absolute path string.
+static EPUB_TITLE_CACHE: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
+fn epub_title_cache() -> &'static Mutex<HashMap<String, String>> {
+    EPUB_TITLE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Clear all session caches (called on explicit refresh).
+fn invalidate_caches() {
+    if let Ok(mut guard) = reader_path_cache().lock() {
+        *guard = None;
+    }
+    if let Ok(mut guard) = epub_title_cache().lock() {
+        guard.clear();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type DiskInfo = (
     Option<String>,
@@ -85,8 +120,16 @@ struct ReaderPreview {
     data_url: String,
 }
 
+// ---------------------------------------------------------------------------
+// Tauri commands
+// ---------------------------------------------------------------------------
+
 #[tauri::command]
 fn get_reader_state() -> Result<ReaderState, String> {
+    // Always re-discover on explicit state fetch (user pressed Refresh or
+    // the app just launched) — but update the path cache as a side effect.
+    invalidate_caches();
+
     let volumes = discover_reader_volumes()?;
     let reader_volume = volumes
         .iter()
@@ -94,6 +137,13 @@ fn get_reader_state() -> Result<ReaderState, String> {
     let launcher_volume = volumes
         .iter()
         .find(|volume| volume.role == VolumeRole::Launcher);
+
+    // Warm the path cache if we found a reader.
+    if let Some(rv) = reader_volume {
+        if let Ok(mut guard) = reader_path_cache().lock() {
+            *guard = Some(rv.mount_point.clone());
+        }
+    }
 
     let (model, total_space, free_space, total_bytes, free_bytes) =
         if let Some(reader_volume) = reader_volume {
@@ -221,7 +271,7 @@ fn get_reader_entry_details(relative_path: String) -> Result<ReaderEntryDetails,
 }
 
 #[tauri::command]
-fn get_reader_preview(relative_path: String) -> Result<Option<ReaderPreview>, String> {
+async fn get_reader_preview(relative_path: String) -> Result<Option<ReaderPreview>, String> {
     let path = resolve_reader_path(&relative_path)?;
     let extension = path
         .extension()
@@ -229,7 +279,14 @@ fn get_reader_preview(relative_path: String) -> Result<Option<ReaderPreview>, St
 
     match extension.as_deref() {
         Some("epub") => Ok(extract_epub_cover_preview(&path)),
-        Some("pdf") => Ok(generate_pdf_preview(&path)),
+        Some("pdf") => {
+            // Run the blocking qlmanage subprocess off the async executor
+            // so it cannot stall the Tauri command dispatch loop.
+            let path_clone = path.clone();
+            tauri::async_runtime::spawn_blocking(move || generate_pdf_preview(&path_clone))
+                .await
+                .map_err(|error| error.to_string())
+        }
         _ => Ok(None),
     }
 }
@@ -248,7 +305,7 @@ fn search_reader_entries(query: String) -> Result<Vec<ReaderEntry>, String> {
     }
 
     let mut results = Vec::new();
-    collect_matches(root, &trimmed, &mut results)?;
+    collect_matches(root, &trimmed, &root_path, &mut results)?;
 
     results.sort_by(|a, b| {
         a.relative_path
@@ -309,6 +366,10 @@ fn reveal_in_finder(absolute_path: String) -> Result<(), String> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Path helpers
+// ---------------------------------------------------------------------------
+
 fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
     let mut path = PathBuf::from(reader_root_path()?);
 
@@ -323,13 +384,33 @@ fn resolve_reader_path(relative_path: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Returns the reader mount path, using the session cache when available
+/// to avoid running `diskutil` on every IPC call.
 fn reader_root_path() -> Result<String, String> {
-    discover_reader_volumes()?
+    // Fast path: return cached value if available.
+    if let Ok(guard) = reader_path_cache().lock() {
+        if let Some(ref path) = *guard {
+            return Ok(path.clone());
+        }
+    }
+
+    // Slow path: discover volumes, populate cache, return path.
+    let path = discover_reader_volumes()?
         .into_iter()
         .find(|volume| volume.role == VolumeRole::Reader)
         .map(|volume| volume.mount_point)
-        .ok_or_else(|| "No mounted Sony Reader volume found".to_string())
+        .ok_or_else(|| "No mounted Sony Reader volume found".to_string())?;
+
+    if let Ok(mut guard) = reader_path_cache().lock() {
+        *guard = Some(path.clone());
+    }
+
+    Ok(path)
 }
+
+// ---------------------------------------------------------------------------
+// Volume discovery
+// ---------------------------------------------------------------------------
 
 fn discover_reader_volumes() -> Result<Vec<DetectedVolume>, String> {
     let output = Command::new("diskutil")
@@ -465,7 +546,19 @@ fn infer_volume_role(volume_name: Option<&str>, media_name: Option<&str>) -> Vol
     }
 }
 
-fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> Result<(), String> {
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/// Recursive filesystem walker — accepts the pre-resolved root_path string
+/// so it does not re-invoke `reader_root_path()` (and thus `diskutil`) on
+/// every directory level.
+fn collect_matches(
+    path: &Path,
+    query: &str,
+    root_path: &str,
+    results: &mut Vec<ReaderEntry>,
+) -> Result<(), String> {
     for item in fs::read_dir(path).map_err(|error| error.to_string())? {
         let entry = item.map_err(|error| error.to_string())?;
         let entry_path = entry.path();
@@ -483,7 +576,7 @@ fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> 
 
         if name.to_lowercase().contains(query) {
             let relative_path = entry_path
-                .strip_prefix(reader_root_path()?)
+                .strip_prefix(root_path)
                 .map_err(|error| error.to_string())?
                 .to_string_lossy()
                 .trim_start_matches('/')
@@ -501,12 +594,16 @@ fn collect_matches(path: &Path, query: &str, results: &mut Vec<ReaderEntry>) -> 
         }
 
         if metadata.is_dir() {
-            collect_matches(&entry_path, query, results)?;
+            collect_matches(&entry_path, query, root_path, results)?;
         }
     }
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// File helpers
+// ---------------------------------------------------------------------------
 
 fn modified_at(metadata: &fs::Metadata) -> Option<u64> {
     metadata
@@ -523,7 +620,7 @@ fn should_hide_entry(name: &str) -> bool {
 fn display_name_for_entry(path: &Path, file_name: &str, extension: Option<&str>) -> String {
     if let Some(ext) = extension {
         if ext.eq_ignore_ascii_case("epub") {
-            if let Some(title) = extract_epub_title(path) {
+            if let Some(title) = cached_epub_title(path) {
                 return title;
             }
         }
@@ -531,6 +628,34 @@ fn display_name_for_entry(path: &Path, file_name: &str, extension: Option<&str>)
 
     file_name.to_string()
 }
+
+/// Returns the EPUB title from the in-memory cache, parsing the archive
+/// only on the first access for each path.
+fn cached_epub_title(path: &Path) -> Option<String> {
+    let key = path.to_string_lossy().to_string();
+
+    // Check cache first (read-only lock).
+    {
+        let guard = epub_title_cache().lock().ok()?;
+        if let Some(title) = guard.get(&key) {
+            return Some(title.clone());
+        }
+    }
+
+    // Cache miss — parse the EPUB.
+    let title = extract_epub_title(path)?;
+
+    // Store in cache.
+    if let Ok(mut guard) = epub_title_cache().lock() {
+        guard.insert(key, title.clone());
+    }
+
+    Some(title)
+}
+
+// ---------------------------------------------------------------------------
+// EPUB / preview helpers
+// ---------------------------------------------------------------------------
 
 fn extract_epub_cover_preview(path: &Path) -> Option<ReaderPreview> {
     let file = fs::File::open(path).ok()?;
@@ -683,6 +808,10 @@ fn guess_mime_from_path(path: &str) -> &'static str {
     }
 }
 
+// ---------------------------------------------------------------------------
+// diskutil helpers
+// ---------------------------------------------------------------------------
+
 fn parse_diskutil_info(path: &str) -> DiskInfo {
     let output = Command::new("diskutil").args(["info", path]).output();
 
@@ -733,6 +862,10 @@ fn format_bytes(value: u64) -> String {
         format!("{:.2} GB", value_f / GB)
     }
 }
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
 
 fn main() {
     tauri::Builder::default()

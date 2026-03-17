@@ -1,60 +1,98 @@
 # Sony eBook Library Revival
 
 <p align="center">
-  <img src="public/brand-mark.svg" alt="Sony eBook Library Revival icon" width="128" height="128" />
+  <img src="public/brand-mark.svg" alt="Sony eBook Library Revival icon" width="96" height="96" />
 </p>
 
 <p align="center">
-  <img src="public/screenshots/app-overview.png" alt="Sony eBook Library Revival desktop app overview" width="900" />
+  <img src="public/screenshots/app-overview.png" alt="Sony eBook Library Revival desktop app" width="900" />
 </p>
 
-A modern macOS app for classic Sony Readers.
+A modern macOS desktop app for classic Sony Readers.
 
-It replaces Sony's dead setup-era utility with a cleaner local workflow for browsing the device, previewing books, moving files in and out, and managing older readers on current Macs.
+Replaces Sony's abandoned setup-era utility with a focused local workflow: browse the device, preview books, move files in and out, and manage older readers on current Macs — no storefronts, no sync services.
 
-Website: `https://speed785.github.io/sony-ebook-library-revival/`
+- Website: `https://speed785.github.io/sony-ebook-library-revival/`
+- Latest release: `https://github.com/speed785/sony-ebook-library-revival/releases/latest`
+- Direct download: `https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg`
 
-Latest release: `https://github.com/speed785/sony-ebook-library-revival/releases/latest`
-
-Direct Mac download: `https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg`
+---
 
 ## What the app does
 
-- detects mounted Sony Reader volumes on macOS
-- shows device details like model, mounted volumes, filesystem, and storage usage
-- browses the reader with a collapsible tree pane, file list, and collapsible details drawer
-- supports search, filtering, and sorting inside the reader workspace
-- prefers real book locations like `database/media/books` instead of just setup/manual folders
-- imports books from Finder, reveals files in Finder, exports selected files, and supports dragging selected files toward Finder from the app
-- previews EPUB and PDF items in the details drawer when metadata or thumbnails are available
-- keeps the public website focused on product information, screenshots, and downloads
+- Detects mounted Sony Reader volumes over USB on macOS
+- Shows device details — model, filesystem, mounted volumes, storage usage
+- Navigates the reader with a collapsible tree sidebar, file list, filter chips, and a slide-out details drawer
+- Prefers real book locations (`database/media/books`) over setup folders
+- Previews EPUB cover images and PDF thumbnails in the details drawer
+- Imports books from Finder via file picker or drag-and-drop onto the app window
+- Exports files to any destination via a native save dialog
+- Reveals selected files in Finder
+- Supports dragging selected files out of the app into Finder
+- Search across the full device filesystem, debounced and cached for speed
 
-## Why this exists
+## Performance
 
-Older Sony readers still work well, but their original Mac software does not. This project keeps the useful parts of that workflow alive without relying on abandoned storefronts, legacy installers, or dead sync services.
+Several hot paths were optimised to eliminate the lag that appeared on larger libraries:
 
-## App and website
+| Area                  | Before                                                    | After                                                               |
+| --------------------- | --------------------------------------------------------- | ------------------------------------------------------------------- |
+| Reader mount path     | `diskutil` spawned on every IPC call                      | Cached in-memory for the session via `OnceLock`; cleared on Refresh |
+| EPUB title extraction | ZIP opened and OPF parsed per file, per directory listing | `HashMap` cache keyed by path — each EPUB parsed once per session   |
+| Search                | IPC or full flat-map fired on every keystroke             | 250 ms debounce before the search fires                             |
+| Directory load        | `listEntries` + `buildTreeRoots` ran sequentially         | Both run in parallel via `Promise.all`                              |
+| PDF preview           | `qlmanage` blocked the Tauri command thread               | Moved to `spawn_blocking` — UI stays responsive                     |
 
-- The desktop app is the real tool and has live device access
-- The website is informational and points people to the app, screenshots, and releases
+## Design
 
-## Screenshots
+The app uses a **light e-paper × aero chrome** visual language:
 
-<p align="center">
-  <img src="public/screenshots/app-library.png" alt="Sony eBook Library Revival library browser" width="900" />
-</p>
-
-The latest screenshots reflect the current reader workspace, including the books root, preview drawer, and updated file navigation.
+- Cool off-white surfaces (`#f5f7fa`) with a multi-radial linen gradient background
+- Single steel-blue chrome accent (`#2477e8`, desaturated to ~65% saturation)
+- Frosted glass panels — `backdrop-filter: blur` with 1 px inner-border refraction
+- Geist typeface (Avenir Next fallback) with tabular numerics on data columns
+- Compositor-only hover transitions (`transform`, `opacity`, `background-color`) — no layout-triggering animations
+- `prefers-reduced-motion` respected throughout
 
 ## Stack
 
-- React + TypeScript
-- Vite
-- Tauri v2
-- Rust
-- Vitest + Testing Library
-- ESLint + Prettier
-- GitHub Actions
+| Layer       | Technology                 |
+| ----------- | -------------------------- |
+| UI          | React 19 + TypeScript 5    |
+| Build       | Vite 7                     |
+| Desktop     | Tauri 2                    |
+| Backend     | Rust (2021 edition)        |
+| Icons       | Lucide React               |
+| Tree        | rc-tree                    |
+| Tests       | Vitest 4 + Testing Library |
+| Lint/format | ESLint 9 + Prettier 3      |
+| CI/CD       | GitHub Actions             |
+
+## Project structure
+
+```
+src/
+├── main.tsx                  # Route: Website (web) or DesktopApp (Tauri)
+├── styles.css                # Full design system — tokens, components, layout
+├── types.ts                  # Shared TypeScript types
+├── utils.ts                  # formatBytes, formatDate, breadcrumbParts, assetUrl
+├── app/
+│   ├── DesktopApp.tsx        # Root shell — all state, effects, IPC handlers (~280 lines)
+│   ├── helpers.tsx           # iconForEntry, fileKindLabel, stripDisplayExtension, etc.
+│   └── components/
+│       ├── Topbar.tsx
+│       ├── DeviceBanner.tsx
+│       ├── NavSidebar.tsx
+│       ├── ContentList.tsx   # React.memo — isolated from unrelated state changes
+│       ├── DetailsDrawer.tsx
+│       ├── DisconnectedState.tsx
+│       └── DetailItem.tsx
+└── site/
+    └── Website.tsx           # Marketing landing page
+
+src-tauri/src/
+└── main.rs                   # Rust backend — volume detection, file ops, previews
+```
 
 ## Development
 
@@ -64,16 +102,22 @@ Install dependencies:
 npm install
 ```
 
-Run the website/app frontend:
+Run the frontend only (website preview at `http://localhost:1420`):
 
 ```bash
 npm run dev
 ```
 
-Run the desktop app:
+Run the full desktop app (Vite + Rust, hot-reloads both):
 
 ```bash
-npm run tauri:dev
+npm run tauri dev
+```
+
+Run tests:
+
+```bash
+npm test
 ```
 
 Generate updated screenshots from the current preview route:
@@ -82,38 +126,48 @@ Generate updated screenshots from the current preview route:
 npm run screenshots
 ```
 
-Build the website:
-
-```bash
-npm run build
-```
-
-Build the desktop app:
-
-```bash
-npm run tauri:build
-```
-
 ## Quality checks
 
-Run the full project check set:
+Run the full check set before pushing:
 
 ```bash
 npm run check
 ```
 
-That includes:
+This runs in order:
 
-- `npm run lint`
-- `npm run format:check`
-- `npm run test`
-- `npm run build`
-- `cargo fmt --manifest-path src-tauri/Cargo.toml --all --check`
-- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+1. `npm run lint` — ESLint
+2. `npm run format:check` — Prettier
+3. `npm run test` — Vitest
+4. `npm run build` — TypeScript + Vite
+5. `cargo fmt --manifest-path src-tauri/Cargo.toml --all --check`
+6. `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+
+Individual Rust checks:
+
+```bash
+cargo check --manifest-path src-tauri/Cargo.toml
+cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
+
+## Building for release
+
+```bash
+npm run tauri build
+```
+
+Produces a signed `.dmg` in `src-tauri/target/release/bundle/dmg/`. Version tags like `v0.1.0` trigger the release workflow and publish the DMG automatically via GitHub Actions.
 
 ## Screenshots and icons
 
-Regenerate the macOS icon set:
+Regenerate app screenshots (requires the dev server to be running):
+
+```bash
+npm run screenshots
+```
+
+Regenerate the macOS icon set from `public/brand-mark.svg`:
 
 ```bash
 npm run icons:mac
@@ -121,22 +175,25 @@ npm run icons:mac
 
 Branding files:
 
-- Website/app icon source: `public/brand-mark.svg`
-- Desktop icon PNG: `src-tauri/icons/icon.png`
-- Desktop icon bundle: `src-tauri/icons/icon.icns`
+- `public/brand-mark.svg` — source icon (used on the website and as the Tauri app icon source)
+- `src-tauri/icons/icon.png` — 1024 × 1024 desktop icon
+- `src-tauri/icons/icon.icns` — macOS icon bundle
 
-## Releases
+## CI/CD
 
-Version tags like `v0.1.0` trigger the release workflow and publish the macOS DMG automatically.
+| Workflow      | Trigger            | What it does                                                    |
+| ------------- | ------------------ | --------------------------------------------------------------- |
+| `ci.yml`      | PR / push          | lint → format → test → build → cargo fmt → clippy → cargo check |
+| `release.yml` | Version tag (`v*`) | `tauri build` → publishes macOS DMG as a GitHub Release         |
+| `pages.yml`   | Push to `main`     | Builds the site and deploys to GitHub Pages                     |
+| `codeql.yml`  | Weekly             | Static analysis on TypeScript and Rust                          |
 
-The release page is here:
+## Security
 
-`https://github.com/speed785/sony-ebook-library-revival/releases`
+`npm audit` is clean. The remaining moderate GitHub advisory comes from upstream Rust GUI crates in Tauri's cross-platform stack, not from this project's own dependencies.
 
-## Security note
-
-`npm audit` is clean locally. The remaining moderate GitHub alert appears to come from upstream Rust GUI dependencies pulled in by Tauri's cross-platform stack rather than from this project's own TypeScript dependencies.
+CSP is currently disabled (`"csp": null` in `tauri.conf.json`) to allow inline base64 preview images from the device. This is intentional for the desktop-only Tauri context.
 
 ## Origins
 
-This remake is informed by the launcher resources found on classic Sony Reader devices, including the old `Setup eBook Library.app` bundle mounted from the device launcher volume.
+Informed by the launcher resources found on classic Sony Reader devices, including the `Setup eBook Library.app` bundle mounted from the device launcher volume. Rebuilt from scratch for current macOS — not a port of the original.

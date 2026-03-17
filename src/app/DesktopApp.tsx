@@ -1,22 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import {
-  BookOpen,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  ExternalLink,
-  File,
-  FileArchive,
-  FileText,
-  Folder,
-  FolderOpen,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  Search,
-} from "lucide-react";
-import Tree from "rc-tree";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open, save } from "@tauri-apps/plugin-dialog";
@@ -30,11 +12,24 @@ import type {
   ReaderPreview,
   ReaderState,
 } from "../types";
-import { assetUrl, breadcrumbParts, formatBytes, formatDate } from "../utils";
+import { assetUrl } from "../utils";
+import { createDragIconDataUrl, preferredRoots } from "./helpers";
+import { toTreeNode } from "./components/NavSidebar";
+
+import { Topbar } from "./components/Topbar";
+import { DeviceBanner } from "./components/DeviceBanner";
+import { NavSidebar } from "./components/NavSidebar";
+import { ContentList } from "./components/ContentList";
+import { DetailsDrawer } from "./components/DetailsDrawer";
+import { DisconnectedState } from "./components/DisconnectedState";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 type TreeNode = {
   key: string;
-  title: ReactNode;
+  title: React.ReactNode;
   isLeaf?: boolean;
   children?: TreeNode[];
 };
@@ -42,6 +37,10 @@ type TreeNode = {
 type DesktopAppProps = {
   mode: AppMode;
 };
+
+// ---------------------------------------------------------------------------
+// Preview data (mode === "preview")
+// ---------------------------------------------------------------------------
 
 const previewDevice: ReaderState = {
   desktop: true,
@@ -220,8 +219,14 @@ const previewEntries: Record<string, ReaderEntry[]> = {
   "Digital Editions": [],
 };
 
+// ---------------------------------------------------------------------------
+// Root component
+// ---------------------------------------------------------------------------
+
 export function DesktopApp({ mode }: DesktopAppProps) {
   const canUseNativeBridge = mode === "live" && "__TAURI_INTERNALS__" in window;
+
+  // --- State ---
   const [device, setDevice] = useState<ReaderState>({
     desktop: mode === "live",
     reader_available: false,
@@ -267,14 +272,16 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   >("all");
   const [transferState, setTransferState] = useState<string | null>(null);
 
+  // Debounce timer for search — avoids firing IPC on every keystroke.
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- Effects ---
   useEffect(() => {
     void refreshDevice();
   }, []);
 
   useEffect(() => {
-    if (!canUseNativeBridge) {
-      return;
-    }
+    if (!canUseNativeBridge) return;
 
     const webview = getCurrentWebview();
     let unlisten: (() => void) | undefined;
@@ -286,20 +293,15 @@ export function DesktopApp({ mode }: DesktopAppProps) {
           setDragActive(true);
           return;
         }
-
         if (event.payload.type === "leave") {
           document.body.classList.remove("drag-target-active");
           setDragActive(false);
           return;
         }
-
         document.body.classList.remove("drag-target-active");
         setDragActive(false);
         const paths = event.payload.paths;
-        if (paths.length === 0 || !device.reader_available) {
-          return;
-        }
-
+        if (paths.length === 0 || !device.reader_available) return;
         await copyIntoReader(paths);
       })
       .then((listener) => {
@@ -313,6 +315,142 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     };
   }, [canUseNativeBridge, currentDir, device.reader_available, mode]);
 
+  // --- IPC helpers ---
+  async function listEntries(path: string): Promise<ReaderEntry[]> {
+    if (mode === "preview") return previewEntries[path] || [];
+    return invoke<ReaderEntry[]>("list_reader_entries", { relativePath: path });
+  }
+
+  async function resolveInitialPath() {
+    for (const preferred of preferredRoots()) {
+      try {
+        const items = await listEntries(preferred);
+        if (items.length > 0 || preferred) return preferred;
+      } catch {
+        continue;
+      }
+    }
+    const rootEntries = await listEntries("");
+    return rootEntries.find((e) => e.is_dir)?.relative_path || "";
+  }
+
+  async function buildTreeRoots(): Promise<TreeNode[]> {
+    const rootEntries = (await listEntries(""))
+      .filter((e) => e.is_dir)
+      .map(toTreeNode);
+
+    const quickRoots: TreeNode[] = [];
+    for (const preferred of preferredRoots().filter(Boolean)) {
+      const parts = preferred.split("/");
+      const title =
+        parts[parts.length - 1] === "books" ? "Books" : parts[parts.length - 1];
+      quickRoots.push({ key: preferred, title, isLeaf: false });
+    }
+
+    const unique = new Map<string, TreeNode>();
+    [...quickRoots, ...rootEntries].forEach((node) =>
+      unique.set(node.key, node),
+    );
+    return [...unique.values()];
+  }
+
+  async function loadDirectory(
+    path: string,
+    state: ReaderState,
+    preferDocuments: boolean,
+  ) {
+    if (!state.reader_available) return;
+
+    const targetPath = preferDocuments
+      ? path
+      : path || (await resolveInitialPath());
+
+    // Fetch directory contents and rebuild the tree roots in parallel to
+    // halve the number of sequential IPC round-trips on every navigation.
+    const [nextEntries, rootNodes] = await Promise.all([
+      listEntries(targetPath),
+      buildTreeRoots(),
+    ]);
+
+    setCurrentDir(targetPath);
+    setEntries(nextEntries);
+    setSelectedEntry(null);
+    setSelectedEntryDetails(null);
+    setSelectedPreview(null);
+    setSelectedPaths([]);
+    setDrawerView({ kind: "closed" });
+    setTreeNodes(rootNodes);
+    setExpandedKeys(
+      targetPath
+        ? targetPath.split("/").reduce<string[]>((acc, _, index, arr) => {
+            acc.push(arr.slice(0, index + 1).join("/"));
+            return acc;
+          }, [])
+        : [],
+    );
+  }
+
+  async function loadTreeChildren(nodeKey: string) {
+    const children = (await listEntries(nodeKey))
+      .filter((e) => e.is_dir)
+      .map(toTreeNode);
+    setTreeNodes((current) => updateTreeChildren(current, nodeKey, children));
+  }
+
+  // --- Search with debounce ---
+  function searchEntries(query: string) {
+    setSearchQuery(query);
+    if (searchDebounceRef.current !== null)
+      clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      void runSearch(query);
+    }, 250);
+  }
+
+  async function runSearch(query: string) {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setIsSearching(false);
+      await loadDirectory(currentDir, device, mode === "preview");
+      return;
+    }
+
+    setIsSearching(true);
+    setStatus(`Searching for "${trimmed}"`);
+
+    if (mode === "preview") {
+      const flattened = Object.values(previewEntries)
+        .flat()
+        .filter(
+          (entry, index, all) =>
+            all.findIndex(
+              (item) => item.relative_path === entry.relative_path,
+            ) === index,
+        )
+        .filter((entry) =>
+          entry.name.toLowerCase().includes(trimmed.toLowerCase()),
+        );
+      setEntries(flattened);
+      setSelectedEntry(null);
+      setSelectedEntryDetails(null);
+      setSelectedPreview(null);
+      setSelectedPaths([]);
+      setDrawerView({ kind: "closed" });
+      return;
+    }
+
+    const results = await invoke<ReaderEntry[]>("search_reader_entries", {
+      query: trimmed,
+    });
+    setEntries(results);
+    setSelectedEntry(null);
+    setSelectedEntryDetails(null);
+    setSelectedPreview(null);
+    setSelectedPaths([]);
+    setDrawerView({ kind: "closed" });
+  }
+
+  // --- Device refresh ---
   async function refreshDevice() {
     setStatus("Checking mounted Sony volumes");
     setCheckedAt(
@@ -356,148 +494,10 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     }
   }
 
-  async function listEntries(path: string): Promise<ReaderEntry[]> {
-    if (mode === "preview") {
-      return previewEntries[path] || [];
-    }
-
-    return invoke<ReaderEntry[]>("list_reader_entries", { relativePath: path });
-  }
-
-  async function loadDirectory(
-    path: string,
-    state: ReaderState,
-    preferDocuments: boolean,
-  ) {
-    if (!state.reader_available) {
-      return;
-    }
-
-    const targetPath = preferDocuments
-      ? path
-      : path || (await resolveInitialPath());
-    const nextEntries = await listEntries(targetPath);
-    setCurrentDir(targetPath);
-    setEntries(nextEntries);
-    setSelectedEntry(null);
-    setSelectedEntryDetails(null);
-    setSelectedPreview(null);
-    setSelectedPaths([]);
-    setDrawerView({ kind: "closed" });
-
-    const rootNodes = await buildTreeRoots();
-    setTreeNodes(rootNodes);
-    setExpandedKeys(
-      targetPath
-        ? targetPath.split("/").reduce<string[]>((acc, _, index, arr) => {
-            const key = arr.slice(0, index + 1).join("/");
-            acc.push(key);
-            return acc;
-          }, [])
-        : [],
-    );
-  }
-
-  async function resolveInitialPath() {
-    for (const preferredPath of preferredRoots()) {
-      try {
-        const items = await listEntries(preferredPath);
-        if (items.length > 0 || preferredPath) {
-          return preferredPath;
-        }
-      } catch {
-        continue;
-      }
-    }
-
-    const rootEntries = await listEntries("");
-    return rootEntries.find((entry) => entry.is_dir)?.relative_path || "";
-  }
-
-  async function buildTreeRoots(): Promise<TreeNode[]> {
-    const rootEntries = (await listEntries(""))
-      .filter((entry) => entry.is_dir)
-      .map(toTreeNode);
-
-    const quickRoots: TreeNode[] = [];
-    for (const preferredPath of preferredRoots().filter(Boolean)) {
-      try {
-        const parts = preferredPath.split("/");
-        const title =
-          parts[parts.length - 1] === "books"
-            ? "Books"
-            : parts[parts.length - 1];
-        quickRoots.push({
-          key: preferredPath,
-          title,
-          isLeaf: false,
-        });
-      } catch {
-        continue;
-      }
-    }
-
-    const unique = new Map<string, TreeNode>();
-    [...quickRoots, ...rootEntries].forEach((node) =>
-      unique.set(node.key, node),
-    );
-    return [...unique.values()];
-  }
-
-  async function loadTreeChildren(nodeKey: string) {
-    const children = (await listEntries(nodeKey))
-      .filter((entry) => entry.is_dir)
-      .map(toTreeNode);
-    setTreeNodes((current) => updateTreeChildren(current, nodeKey, children));
-  }
-
-  async function searchEntries(query: string) {
-    const trimmed = query.trim();
-    setSearchQuery(query);
-
-    if (!trimmed) {
-      setIsSearching(false);
-      await loadDirectory(currentDir, device, mode === "preview");
-      return;
-    }
-
-    setIsSearching(true);
-    setStatus(`Searching for "${trimmed}"`);
-
-    if (mode === "preview") {
-      const flattened = Object.values(previewEntries)
-        .flat()
-        .filter(
-          (entry, index, all) =>
-            all.findIndex(
-              (item) => item.relative_path === entry.relative_path,
-            ) === index,
-        )
-        .filter((entry) =>
-          entry.name.toLowerCase().includes(trimmed.toLowerCase()),
-        );
-      setEntries(flattened);
-      setSelectedEntry(null);
-      setSelectedEntryDetails(null);
-      setSelectedPreview(null);
-      setSelectedPaths([]);
-      setDrawerView({ kind: "closed" });
-      return;
-    }
-
-    const results = await invoke<ReaderEntry[]>("search_reader_entries", {
-      query: trimmed,
-    });
-    setEntries(results);
-    setSelectedEntry(null);
-    setSelectedEntryDetails(null);
-    setSelectedPreview(null);
-    setSelectedPaths([]);
-    setDrawerView({ kind: "closed" });
-  }
-
+  // --- Entry actions ---
   async function openEntry(entry: ReaderEntry) {
     setSelectedEntry(entry);
+    setSelectedPaths([entry.relative_path]);
 
     const details: ReaderEntryDetails =
       mode === "preview"
@@ -515,10 +515,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     if (mode === "preview") {
       setSelectedPreview(
         details.extension === "epub" || details.extension === "pdf"
-          ? {
-              mime_type: "image/svg+xml",
-              data_url: assetUrl("brand-mark.svg"),
-            }
+          ? { mime_type: "image/svg+xml", data_url: assetUrl("brand-mark.svg") }
           : null,
       );
     } else if (details.extension === "epub" || details.extension === "pdf") {
@@ -529,72 +526,50 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     } else {
       setSelectedPreview(null);
     }
+
     setDetailsCollapsed(false);
     setDrawerView({ kind: "entry", entry });
   }
 
   async function copyIntoReader(sourcePaths: string[]) {
-    setTransferState(
-      `Copying ${sourcePaths.length} file${sourcePaths.length === 1 ? "" : "s"}`,
-    );
-    setStatus(
-      `Copying ${sourcePaths.length} file${sourcePaths.length === 1 ? "" : "s"} to the reader`,
-    );
+    const count = sourcePaths.length;
+    const label = `${count} file${count === 1 ? "" : "s"}`;
+    setTransferState(`Copying ${label}`);
+    setStatus(`Copying ${label} to the reader`);
     await invoke("copy_files_to_reader", {
       sourcePaths,
       targetRelativeDir: currentDir,
     });
     await loadDirectory(currentDir, device, mode === "preview");
-    setStatus(
-      `Imported ${sourcePaths.length} item${sourcePaths.length === 1 ? "" : "s"}`,
-    );
-    setTransferState(
-      `Imported ${sourcePaths.length} item${sourcePaths.length === 1 ? "" : "s"}`,
-    );
+    setStatus(`Imported ${count} item${count === 1 ? "" : "s"}`);
+    setTransferState(`Imported ${count} item${count === 1 ? "" : "s"}`);
   }
 
   async function importFromDisk() {
-    if (!canUseNativeBridge || !device.reader_available) {
-      return;
-    }
-
+    if (!canUseNativeBridge || !device.reader_available) return;
     const selected = await open({
       multiple: true,
       filters: [{ name: "Books", extensions: ["epub", "pdf", "txt"] }],
     });
-
-    if (!selected) {
-      return;
-    }
-
+    if (!selected) return;
     const paths = Array.isArray(selected) ? selected : [selected];
     await copyIntoReader(paths);
   }
 
   async function exportSelected() {
-    if (!selectedEntry || selectedEntry.is_dir || !canUseNativeBridge) {
-      return;
-    }
-
+    if (!selectedEntry || selectedEntry.is_dir || !canUseNativeBridge) return;
     const destination = await save({ defaultPath: selectedEntry.name });
-    if (!destination) {
-      return;
-    }
-
+    if (!destination) return;
     await invoke("export_reader_file", {
       relativePath: selectedEntry.relative_path,
       destinationPath: destination,
     });
-
     setStatus(`Exported ${selectedEntry.name}`);
     setTransferState(`Exported ${selectedEntry.name}`);
   }
 
   async function revealSelected() {
-    if (!selectedEntry || !canUseNativeBridge) {
-      return;
-    }
-
+    if (!selectedEntry || !canUseNativeBridge) return;
     await invoke("reveal_in_finder", {
       absolutePath: selectedEntry.absolute_path,
     });
@@ -602,48 +577,27 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   }
 
   async function dragSelectedToFinder() {
-    if (!canUseNativeBridge || selectedPaths.length === 0) {
-      return;
-    }
-
+    if (!canUseNativeBridge || selectedPaths.length === 0) return;
     const dragPaths = visibleEntries
-      .filter(
-        (entry) => selectedPaths.includes(entry.relative_path) && !entry.is_dir,
-      )
-      .map((entry) => entry.absolute_path);
-
-    if (dragPaths.length === 0) {
-      return;
-    }
-
-    const icon = createDragIconDataUrl();
-    await startDrag({
-      item: dragPaths,
-      icon,
-    });
+      .filter((e) => selectedPaths.includes(e.relative_path) && !e.is_dir)
+      .map((e) => e.absolute_path);
+    if (dragPaths.length === 0) return;
+    await startDrag({ item: dragPaths, icon: createDragIconDataUrl() });
   }
 
+  // --- Derived ---
   const usagePercent = useMemo(() => {
-    if (!device.total_bytes || !device.used_bytes) {
-      return 0;
-    }
-
+    if (!device.total_bytes || !device.used_bytes) return 0;
     return Math.round((device.used_bytes / device.total_bytes) * 100);
   }, [device.total_bytes, device.used_bytes]);
 
-  const breadcrumbs = breadcrumbParts(currentDir);
-  const drawerOpen = drawerView.kind !== "closed";
   const modelLabel = device.model || device.volume_name || "Sony Reader";
+  const drawerOpen = drawerView.kind !== "closed";
+
   const visibleEntries = useMemo(() => {
     const filtered = entries.filter((entry) => {
-      if (filterKey === "all") {
-        return true;
-      }
-
-      if (filterKey === "folders") {
-        return entry.is_dir;
-      }
-
+      if (filterKey === "all") return true;
+      if (filterKey === "folders") return entry.is_dir;
       return entry.extension?.toLowerCase() === filterKey;
     });
 
@@ -654,12 +608,9 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         case "date":
           return (right.modified_at || 0) - (left.modified_at || 0);
         case "type": {
-          const leftType = left.is_dir ? "folder" : left.extension || "file";
-          const rightType = right.is_dir ? "folder" : right.extension || "file";
-          return (
-            leftType.localeCompare(rightType) ||
-            left.name.localeCompare(right.name)
-          );
+          const l = left.is_dir ? "folder" : left.extension || "file";
+          const r = right.is_dir ? "folder" : right.extension || "file";
+          return l.localeCompare(r) || left.name.localeCompare(right.name);
         }
         case "name":
         default:
@@ -668,89 +619,25 @@ export function DesktopApp({ mode }: DesktopAppProps) {
     });
   }, [entries, filterKey, sortKey]);
 
+  // --- Render ---
   return (
     <main className="app-shell">
-      <header className="app-topbar">
-        <div>
-          <p className="eyebrow">Sony eBook Library Revival</p>
-          <h1>Reader manager</h1>
-        </div>
-        <div className="topbar-actions">
-          <button
-            className="secondary icon-button"
-            type="button"
-            onClick={() => setNavCollapsed((current) => !current)}
-          >
-            {navCollapsed ? (
-              <PanelLeftOpen size={18} />
-            ) : (
-              <PanelLeftClose size={18} />
-            )}
-          </button>
-          <button
-            className="secondary icon-button"
-            type="button"
-            onClick={() => setDetailsCollapsed((current) => !current)}
-            disabled={drawerView.kind === "closed"}
-          >
-            {detailsCollapsed ? (
-              <PanelRightOpen size={18} />
-            ) : (
-              <PanelRightClose size={18} />
-            )}
-          </button>
-          <button
-            className="secondary"
-            onClick={() => void refreshDevice()}
-            type="button"
-          >
-            Refresh
-          </button>
-        </div>
-      </header>
+      <Topbar
+        navCollapsed={navCollapsed}
+        detailsCollapsed={detailsCollapsed}
+        drawerView={drawerView}
+        onToggleNav={() => setNavCollapsed((c) => !c)}
+        onToggleDetails={() => setDetailsCollapsed((c) => !c)}
+        onRefresh={() => void refreshDevice()}
+      />
 
-      <section
-        className="device-banner"
-        onClick={() => setDrawerView({ kind: "device" })}
-      >
-        <div
-          className={`device-pill ${device.reader_available ? "device-pill--connected" : "device-pill--disconnected"}`}
-        >
-          {device.reader_available ? "Connected" : "Waiting for device"}
-        </div>
-        <div className="device-banner__primary">
-          <strong>
-            {device.reader_available
-              ? modelLabel
-              : "Connect a Sony Reader over USB"}
-          </strong>
-          <span>{status}</span>
-        </div>
-        <div className="device-banner__stats">
-          <div>
-            <label>Free</label>
-            <span>{device.free_space || "--"}</span>
-          </div>
-          <div>
-            <label>Used</label>
-            <span>{device.used_space || "--"}</span>
-          </div>
-          <div>
-            <label>Format</label>
-            <span>{device.filesystem_name || "Unavailable"}</span>
-          </div>
-          <div>
-            <label>Volumes</label>
-            <span>{device.mounted_volumes || 0}</span>
-          </div>
-        </div>
-        <div className="device-banner__meter">
-          <div
-            className="device-banner__meter-fill"
-            style={{ width: `${usagePercent}%` }}
-          />
-        </div>
-      </section>
+      <DeviceBanner
+        device={device}
+        status={status}
+        usagePercent={usagePercent}
+        modelLabel={modelLabel}
+        onOpenDevice={() => setDrawerView({ kind: "device" })}
+      />
 
       {!device.reader_available ? (
         <DisconnectedState onRefresh={() => void refreshDevice()} />
@@ -758,309 +645,73 @@ export function DesktopApp({ mode }: DesktopAppProps) {
         <div
           className={`workspace ${drawerOpen && !detailsCollapsed ? "workspace--drawer-open" : ""} ${navCollapsed ? "workspace--nav-collapsed" : ""}`}
         >
-          <aside
-            className={`workspace__nav ${navCollapsed ? "workspace__nav--collapsed" : ""}`}
-          >
-            <div className="nav-card">
-              <div className="pane-heading">
-                {!navCollapsed ? <p className="eyebrow">Reader</p> : <span />}
-                <button
-                  className="secondary icon-button"
-                  type="button"
-                  onClick={() => setNavCollapsed((current) => !current)}
-                >
-                  {navCollapsed ? (
-                    <ChevronRight size={16} />
-                  ) : (
-                    <ChevronLeft size={16} />
-                  )}
-                </button>
-              </div>
-              <button
-                className="nav-card__device"
-                type="button"
-                onClick={() => setDrawerView({ kind: "device" })}
-              >
-                <div>
-                  <strong>{modelLabel}</strong>
-                  <span>
-                    {device.volume_name ||
-                      device.reader_path ||
-                      "Mounted volume"}
-                  </span>
-                </div>
-                <span>{device.mounted_volumes || 1} volumes</span>
-              </button>
-            </div>
-            {!navCollapsed ? (
-              <div className="nav-card nav-card--tree">
-                <p className="eyebrow">Library tree</p>
-                <div className="nav-card__search">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search reader files"
-                    type="search"
-                    placeholder="Search files and folders"
-                    value={searchQuery}
-                    onChange={(event) => void searchEntries(event.target.value)}
-                  />
-                </div>
-                <Tree
-                  className="reader-tree"
-                  treeData={treeNodes}
-                  expandedKeys={expandedKeys}
-                  selectedKeys={[currentDir]}
-                  onExpand={(keys, info) => {
-                    setExpandedKeys(keys as string[]);
-                    if (info.expanded) {
-                      void loadTreeChildren(String(info.node.key));
-                    }
-                  }}
-                  onSelect={(keys, info) => {
-                    const key = String(keys[0] || info.node.key || "");
-                    if (!key) {
-                      return;
-                    }
+          <NavSidebar
+            collapsed={navCollapsed}
+            navCardCollapsed={navCollapsed}
+            modelLabel={modelLabel}
+            device={device}
+            searchQuery={searchQuery}
+            treeNodes={treeNodes}
+            expandedKeys={expandedKeys}
+            currentDir={currentDir}
+            onToggleCollapsed={() => setNavCollapsed((c) => !c)}
+            onOpenDevice={() => setDrawerView({ kind: "device" })}
+            onSearchChange={searchEntries}
+            onExpandKeys={(keys, expandedNode) => {
+              setExpandedKeys(keys);
+              if (expandedNode) void loadTreeChildren(expandedNode);
+            }}
+            onSelectDirectory={(key) => {
+              setIsSearching(false);
+              setSearchQuery("");
+              setCurrentDir(key);
+              void loadDirectory(key, device, mode === "preview");
+            }}
+          />
 
-                    setIsSearching(false);
-                    setSearchQuery("");
-                    setCurrentDir(key);
-                    void loadDirectory(key, device, mode === "preview");
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="nav-card nav-card--collapsed-actions">
-                <button
-                  className="secondary icon-button"
-                  type="button"
-                  onClick={() => setNavCollapsed(false)}
-                >
-                  <Search size={16} />
-                </button>
-                <button
-                  className="secondary icon-button"
-                  type="button"
-                  onClick={() => setDrawerView({ kind: "device" })}
-                >
-                  <FolderOpen size={16} />
-                </button>
-              </div>
-            )}
-          </aside>
-
-          <section className="workspace__main">
-            {dragActive ? (
-              <div className="drop-overlay">
-                <div className="drop-overlay__panel">
-                  <Download size={28} />
-                  <strong>
-                    Drop books to import into{" "}
-                    {breadcrumbs[breadcrumbs.length - 1]?.label || "Reader"}
-                  </strong>
-                  <span>
-                    EPUB, PDF, TXT and other supported reader files will be
-                    copied into the current folder.
-                  </span>
-                </div>
-              </div>
-            ) : null}
-            <div className="content-header">
-              <div>
-                <div className="breadcrumbs">
-                  {breadcrumbs.map((part, index) => (
-                    <button
-                      key={part.path || "root"}
-                      className="breadcrumb"
-                      type="button"
-                      onClick={() => {
-                        setIsSearching(false);
-                        setSearchQuery("");
-                        void loadDirectory(
-                          part.path,
-                          device,
-                          mode === "preview",
-                        );
-                      }}
-                    >
-                      {part.label}
-                      {index < breadcrumbs.length - 1 ? <span>/</span> : null}
-                    </button>
-                  ))}
-                </div>
-                <h2>
-                  {breadcrumbs[breadcrumbs.length - 1]?.label || "Reader"}
-                </h2>
-              </div>
-              <div className="content-actions">
-                <select
-                  aria-label="Sort files"
-                  value={sortKey}
-                  onChange={(event) =>
-                    setSortKey(
-                      event.target.value as "name" | "type" | "date" | "size",
-                    )
-                  }
-                >
-                  <option value="name">Sort: Name</option>
-                  <option value="type">Sort: Type</option>
-                  <option value="date">Sort: Updated</option>
-                  <option value="size">Sort: Size</option>
-                </select>
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void importFromDisk()}
-                  disabled={!canUseNativeBridge}
-                >
-                  Import books
-                </button>
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => {
-                    if (selectedEntry) {
-                      setDetailsCollapsed(false);
-                      setDrawerView({ kind: "entry", entry: selectedEntry });
-                    } else {
-                      setDetailsCollapsed(false);
-                      setDrawerView({ kind: "device" });
-                    }
-                  }}
-                  disabled={!selectedEntry}
-                >
-                  Details
-                </button>
-                <button
-                  className="secondary"
-                  type="button"
-                  onMouseDown={() => void dragSelectedToFinder()}
-                  disabled={!selectedPaths.length || !canUseNativeBridge}
-                >
-                  <ExternalLink size={16} />
-                  Drag to Finder
-                </button>
-                <button
-                  className="secondary"
-                  type="button"
-                  onClick={() => void exportSelected()}
-                  disabled={
-                    !selectedEntry ||
-                    selectedEntry.is_dir ||
-                    !canUseNativeBridge
-                  }
-                >
-                  Export
-                </button>
-              </div>
-            </div>
-
-            <div className="content-toolbar">
-              <div className="filter-chips">
-                {[
-                  ["all", "All"],
-                  ["folders", "Folders"],
-                  ["epub", "EPUB"],
-                  ["pdf", "PDF"],
-                ].map(([value, label]) => (
-                  <button
-                    key={value}
-                    className={`filter-chip ${filterKey === value ? "filter-chip--active" : ""}`}
-                    type="button"
-                    onClick={() =>
-                      setFilterKey(value as "all" | "folders" | "epub" | "pdf")
-                    }
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="selection-summary">
-                {selectedPaths.length
-                  ? `${selectedPaths.length} item${selectedPaths.length === 1 ? "" : "s"} selected`
-                  : transferState || "Choose a file to inspect or export"}
-              </div>
-            </div>
-
-            <div className="content-list">
-              {isSearching ? (
-                <div className="content-search-state">
-                  Showing results for <strong>{searchQuery}</strong>
-                </div>
-              ) : null}
-              <div className="content-list__header">
-                <span>Select</span>
-                <span>Item</span>
-                <span>Type</span>
-                <span>Updated</span>
-                <span>Size</span>
-              </div>
-              {visibleEntries.length ? (
-                visibleEntries.map((entry) => {
-                  const kind = entry.is_dir ? "Folder" : fileKindLabel(entry);
-                  return (
-                    <button
-                      key={entry.relative_path}
-                      className={`content-row ${selectedEntry?.relative_path === entry.relative_path ? "content-row--selected" : ""}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedPaths([entry.relative_path]);
-                        void openEntry(entry);
-                      }}
-                      onDoubleClick={() => {
-                        if (entry.is_dir) {
-                          setIsSearching(false);
-                          setSearchQuery("");
-                          void loadDirectory(
-                            entry.relative_path,
-                            device,
-                            mode === "preview",
-                          );
-                          return;
-                        }
-
-                        void openEntry(entry);
-                      }}
-                    >
-                      <span>
-                        <input
-                          aria-label={`Select ${entry.name}`}
-                          type="checkbox"
-                          checked={selectedPaths.includes(entry.relative_path)}
-                          onChange={() => {
-                            setSelectedPaths((current) =>
-                              current.includes(entry.relative_path)
-                                ? current.filter(
-                                    (path) => path !== entry.relative_path,
-                                  )
-                                : [...current, entry.relative_path],
-                            );
-                          }}
-                          onClick={(event) => event.stopPropagation()}
-                        />
-                      </span>
-                      <span className="content-row__name">
-                        <span className="content-row__icon">
-                          {iconForEntry(entry, false)}
-                        </span>
-                        <span>
-                          <strong>{stripDisplayExtension(entry.name)}</strong>
-                          <small>{entry.relative_path}</small>
-                        </span>
-                      </span>
-                      <span>{entry.is_dir ? "Folder" : kind}</span>
-                      <span>{formatDate(entry.modified_at)}</span>
-                      <span>
-                        {entry.is_dir ? "--" : formatBytes(entry.size)}
-                      </span>
-                    </button>
-                  );
-                })
-              ) : (
-                <div className="empty-list">This folder is empty.</div>
-              )}
-            </div>
-          </section>
+          <ContentList
+            mode={mode}
+            device={device}
+            canUseNativeBridge={canUseNativeBridge}
+            currentDir={currentDir}
+            visibleEntries={visibleEntries}
+            selectedEntry={selectedEntry}
+            selectedPaths={selectedPaths}
+            searchQuery={searchQuery}
+            isSearching={isSearching}
+            transferState={transferState}
+            sortKey={sortKey}
+            filterKey={filterKey}
+            dragActive={dragActive}
+            drawerView={drawerView}
+            onSortChange={setSortKey}
+            onFilterChange={setFilterKey}
+            onSelectPaths={setSelectedPaths}
+            onToggleSelectedPath={(path) =>
+              setSelectedPaths((current) =>
+                current.includes(path)
+                  ? current.filter((p) => p !== path)
+                  : [...current, path],
+              )
+            }
+            onOpenEntry={(entry) => void openEntry(entry)}
+            onNavigate={(path) => {
+              setIsSearching(false);
+              setSearchQuery("");
+              void loadDirectory(path, device, mode === "preview");
+            }}
+            onImport={() => void importFromDisk()}
+            onExport={() => void exportSelected()}
+            onDragToFinder={() => void dragSelectedToFinder()}
+            onOpenDetails={() => {
+              setDetailsCollapsed(false);
+              if (selectedEntry) {
+                setDrawerView({ kind: "entry", entry: selectedEntry });
+              } else {
+                setDrawerView({ kind: "device" });
+              }
+            }}
+          />
 
           <DetailsDrawer
             collapsed={detailsCollapsed}
@@ -1073,7 +724,7 @@ export function DesktopApp({ mode }: DesktopAppProps) {
             onClose={() => setDrawerView({ kind: "closed" })}
             onReveal={() => void revealSelected()}
             onExport={() => void exportSelected()}
-            onToggleCollapsed={() => setDetailsCollapsed((current) => !current)}
+            onToggleCollapsed={() => setDetailsCollapsed((c) => !c)}
           />
         </div>
       )}
@@ -1081,257 +732,9 @@ export function DesktopApp({ mode }: DesktopAppProps) {
   );
 }
 
-function DisconnectedState({ onRefresh }: { onRefresh: () => void }) {
-  return (
-    <section className="disconnected-state">
-      <div className="disconnected-state__art" aria-hidden="true">
-        <div className="device-illustration">
-          <div className="device-illustration__screen" />
-        </div>
-      </div>
-      <div className="disconnected-state__copy">
-        <p className="eyebrow">Waiting for a reader</p>
-        <h2>Connect your Sony Reader to begin.</h2>
-        <p>
-          Plug the device in over USB to browse its library, move books, and see
-          storage details. Live information only appears when a reader is
-          mounted on your Mac.
-        </p>
-        <button className="primary" type="button" onClick={onRefresh}>
-          Refresh device
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function DetailsDrawer({
-  device,
-  drawerView,
-  selectedEntryDetails,
-  selectedPreview,
-  modelLabel,
-  collapsed,
-  checkedAt,
-  onClose,
-  onReveal,
-  onExport,
-  onToggleCollapsed,
-}: {
-  device: ReaderState;
-  drawerView: DrawerView;
-  selectedEntryDetails: ReaderEntryDetails | null;
-  selectedPreview: ReaderPreview | null;
-  modelLabel: string;
-  collapsed: boolean;
-  checkedAt: string | null;
-  onClose: () => void;
-  onReveal: () => void;
-  onExport: () => void;
-  onToggleCollapsed: () => void;
-}) {
-  if (drawerView.kind === "closed" || collapsed) {
-    return null;
-  }
-
-  return (
-    <aside className="details-drawer">
-      <div className="details-drawer__header">
-        <div>
-          <p className="eyebrow">Details</p>
-          <h3>
-            {drawerView.kind === "device"
-              ? modelLabel
-              : selectedEntryDetails?.name || drawerView.entry.name}
-          </h3>
-        </div>
-        <button className="secondary" type="button" onClick={onClose}>
-          Close
-        </button>
-      </div>
-      {drawerView.kind === "device" ? (
-        <div className="details-drawer__body">
-          <DetailItem label="Model" value={modelLabel || "Unknown"} />
-          <DetailItem
-            label="Reader volume"
-            value={device.reader_path || "Unavailable"}
-          />
-          <DetailItem
-            label="Launcher volume"
-            value={
-              device.launcher_available
-                ? device.launcher_path || "Mounted"
-                : "Not mounted"
-            }
-          />
-          <DetailItem
-            label="Free space"
-            value={device.free_space || "Unavailable"}
-          />
-          <DetailItem
-            label="Used space"
-            value={device.used_space || "Unavailable"}
-          />
-          <DetailItem label="Last refresh" value={checkedAt || "Just now"} />
-        </div>
-      ) : (
-        <div className="details-drawer__body">
-          {selectedPreview ? (
-            <div className="details-preview">
-              <img src={selectedPreview.data_url} alt="Book preview" />
-            </div>
-          ) : (
-            <div className="details-preview details-preview--empty">
-              {iconForEntry(drawerView.entry, true)}
-            </div>
-          )}
-          <DetailItem
-            label="Name"
-            value={selectedEntryDetails?.name || drawerView.entry.name}
-          />
-          <DetailItem
-            label="Path"
-            value={
-              selectedEntryDetails?.relative_path ||
-              drawerView.entry.relative_path
-            }
-          />
-          <DetailItem
-            label="Type"
-            value={
-              selectedEntryDetails?.is_dir
-                ? "Folder"
-                : selectedEntryDetails?.extension?.toUpperCase() || "Document"
-            }
-          />
-          <DetailItem
-            label="Size"
-            value={
-              selectedEntryDetails?.is_dir
-                ? "--"
-                : formatBytes(
-                    selectedEntryDetails?.size || drawerView.entry.size,
-                  )
-            }
-          />
-          <DetailItem
-            label="Updated"
-            value={formatDate(
-              selectedEntryDetails?.modified_at || drawerView.entry.modified_at,
-            )}
-          />
-          {selectedEntryDetails?.is_dir ? (
-            <DetailItem
-              label="Items"
-              value={String(selectedEntryDetails.item_count ?? 0)}
-            />
-          ) : null}
-          <div className="details-drawer__actions">
-            <button className="secondary" type="button" onClick={onReveal}>
-              <ExternalLink size={16} />
-              Reveal in Finder
-            </button>
-            {!drawerView.entry.is_dir ? (
-              <button className="primary" type="button" onClick={onExport}>
-                <Download size={16} />
-                Export file
-              </button>
-            ) : null}
-            <button
-              className="secondary"
-              type="button"
-              onClick={onToggleCollapsed}
-            >
-              <PanelRightClose size={16} />
-              Collapse
-            </button>
-          </div>
-        </div>
-      )}
-    </aside>
-  );
-}
-
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="detail-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function toTreeNode(entry: ReaderEntry): TreeNode {
-  return {
-    key: entry.relative_path,
-    title: (
-      <span className="tree-label">
-        {iconForEntry(entry, false)}
-        <span>
-          {entry.relative_path === "database/media/books"
-            ? "Books"
-            : stripDisplayExtension(entry.name)}
-        </span>
-      </span>
-    ),
-    isLeaf: false,
-  };
-}
-
-function fileKindLabel(entry: ReaderEntry): string {
-  if (entry.extension?.toLowerCase() === "epub") return "EPUB";
-  if (entry.extension?.toLowerCase() === "pdf") return "PDF";
-  if (entry.extension?.toLowerCase() === "zip") return "ZIP";
-  if (entry.extension?.toLowerCase() === "lrf") return "LRF";
-  return "File";
-}
-
-function stripDisplayExtension(name: string): string {
-  return name.replace(/\.(epub|pdf|zip|lrf|txt|rtf)$/i, "");
-}
-
-function iconForEntry(entry: ReaderEntry, large: boolean) {
-  const size = large ? 56 : 20;
-  if (entry.is_dir) {
-    return <Folder size={size} />;
-  }
-  switch ((entry.extension || "").toLowerCase()) {
-    case "epub":
-    case "lrf":
-      return <BookOpen size={size} />;
-    case "pdf":
-      return <FileText size={size} />;
-    case "zip":
-      return <FileArchive size={size} />;
-    default:
-      return <File size={size} />;
-  }
-}
-
-function preferredRoots(): string[] {
-  return ["database/media/books", "Documents", "Digital Editions", ""];
-}
-
-function createDragIconDataUrl(): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = 96;
-  canvas.height = 96;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9sO38p8AAAAASUVORK5CYII=";
-  }
-
-  context.fillStyle = "#6d4c33";
-  context.beginPath();
-  context.roundRect(8, 8, 80, 80, 20);
-  context.fill();
-  context.fillStyle = "#fff9f2";
-  context.font = "600 18px Avenir Next";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillText("BOOK", 48, 48);
-  return canvas.toDataURL("image/png");
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function updateTreeChildren(
   nodes: TreeNode[],
@@ -1339,17 +742,13 @@ function updateTreeChildren(
   children: TreeNode[],
 ): TreeNode[] {
   return nodes.map((node) => {
-    if (node.key === key) {
-      return { ...node, children };
-    }
-
+    if (node.key === key) return { ...node, children };
     if (node.children) {
       return {
         ...node,
         children: updateTreeChildren(node.children, key, children),
       };
     }
-
     return node;
   });
 }
