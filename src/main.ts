@@ -372,8 +372,8 @@ function renderWebLanding(root: HTMLDivElement): void {
           </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
-            A modern remake of Sony's classic Reader setup software for current macOS. The app detects supported Sony
-            readers, browses mounted files, and helps move books on and off the device with a cleaner workflow.
+            A focused macOS utility for classic Sony Readers. It brings device browsing, file transfer, and a cleaner
+            workflow back to hardware that outlived its original software.
           </p>
           <div class="site-meta">
             <span>macOS desktop app</span>
@@ -383,68 +383,103 @@ function renderWebLanding(root: HTMLDivElement): void {
           <div class="site-actions">
             <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg">Download for Mac</a>
             <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View the repo</a>
-            <a class="secondary site-link" href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Why Calibre still matters</a>
+            <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest" target="_blank" rel="noreferrer">Release notes</a>
           </div>
         </div>
         <div class="site-preview" aria-label="Sony eBook Library Revival preview">
-          <div class="site-preview__window">
-            <div class="site-preview__toolbar"></div>
-            <div class="site-preview__content">
-              <div class="site-preview__sidebar">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <div class="site-preview__main">
-                <div class="site-preview__line site-preview__line--title"></div>
-                <div class="site-preview__line"></div>
-                <div class="site-preview__line site-preview__line--short"></div>
-                <div class="site-preview__panel"></div>
-                <div class="site-preview__row">
-                  <div class="site-preview__chip"></div>
-                  <div class="site-preview__chip"></div>
-                  <div class="site-preview__chip"></div>
-                </div>
-              </div>
-            </div>
+          <div class="site-preview__copy">
+            <p class="eyebrow">Purpose</p>
+            <h2>Made for readers that still deserve better software.</h2>
+            <p>
+              Sony's original launcher belongs to another era. This project replaces that dead-end setup flow with a usable,
+              maintained Mac app built around what still matters: mounted storage, readable files, and direct transfer.
+            </p>
+            <ul class="site-preview__list">
+              <li>Detect connected Sony Reader volumes</li>
+              <li>Browse files already on the device</li>
+              <li>Import books from Finder and export them back out</li>
+            </ul>
           </div>
-          <div class="site-preview__device">
-            <div class="site-preview__screen">
-              <div class="site-preview__page"></div>
+          <div class="site-preview__hardware">
+            <div class="site-preview__device">
+              <div class="site-preview__screen">
+                <div class="site-preview__page"></div>
+              </div>
             </div>
+            <div class="site-preview__caption">Built for the Sony PRS generation</div>
           </div>
         </div>
       </section>
 
-      <section class="site-grid">
-        <article class="site-card">
-          <p class="eyebrow">Purpose</p>
-          <h2>Why this project exists.</h2>
-          <p>
-            Sony's original setup software no longer fits modern Macs. This project keeps the useful parts alive: device access, book transfer, and a cleaner library workflow for older Sony readers.
-          </p>
+      <section class="site-purpose">
+        <p class="eyebrow">Why it exists</p>
+        <div class="site-purpose__grid">
+          <div>
+            <h2>The original Sony setup software no longer belongs on a current Mac.</h2>
+          </div>
+          <div>
+            <p>
+              This project exists to keep older Sony readers practical instead of nostalgic. It respects the hardware,
+              drops the broken store-era assumptions, and focuses on reliable local book management.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="site-rows">
+        <article class="site-row">
+          <div class="site-row__label">Desktop app</div>
+          <div class="site-row__body">
+            <h3>The app does the actual work.</h3>
+            <p>
+              It detects mounted readers, shows storage details, browses on-device files, supports Finder drag-in import,
+              and exports selected files back to your Mac.
+            </p>
+          </div>
         </article>
-        <article class="site-card site-card--feature">
-          <p class="eyebrow">Desktop app</p>
-          <h2>The app is the real tool.</h2>
-          <p>
-            The macOS app detects the mounted Reader, shows storage details, browses files on-device, supports Finder drag-in import, and exports selected files back to your Mac.
-          </p>
+        <article class="site-row">
+          <div class="site-row__label">Workflow</div>
+          <div class="site-row__body">
+            <h3>Built around direct transfer, not storefronts.</h3>
+            <p>
+              Connect the reader, inspect its contents, move books in or out, and use Calibre only when conversion or metadata cleanup makes sense.
+            </p>
+          </div>
         </article>
-        <article class="site-card">
-          <p class="eyebrow">Workflow</p>
-          <h2>Built for simple book transfer.</h2>
-          <p>
-            Connect the reader, inspect mounted content, copy books in, export files back out, and use Calibre when you need format conversion or metadata cleanup.
-          </p>
+        <article class="site-row">
+          <div class="site-row__label">Origins</div>
+          <div class="site-row__body">
+            <h3>A clean-room remake of the old launcher era.</h3>
+            <p>
+              The project is informed by classic PRS launcher resources, but rebuilt for modern macOS with TypeScript and Tauri.
+            </p>
+          </div>
         </article>
-        <article class="site-card">
-          <p class="eyebrow">Origins</p>
-          <h2>Built from the old Sony launcher.</h2>
-          <p>
-            The project is a clean-room remake informed by the original PRS launcher resources, but rebuilt for modern Macs with TypeScript and Tauri.
-          </p>
+        <article class="site-row">
+          <div class="site-row__label">Open source</div>
+          <div class="site-row__body">
+            <h3>Public repo, releases, and ongoing iteration.</h3>
+            <p>
+              The website explains the project clearly, the repository documents the work, and releases provide a direct Mac download.
+            </p>
+            <div class="site-inline-links">
+              <a href="https://speed785.github.io/sony-ebook-library-revival/">Website</a>
+              <a href="https://github.com/speed785/sony-ebook-library-revival">Repository</a>
+              <a href="https://github.com/speed785/sony-ebook-library-revival/releases/latest">Latest release</a>
+            </div>
+          </div>
         </article>
+      </section>
+
+      <section class="site-download-band">
+        <p class="eyebrow">Download</p>
+        <div class="site-download-band__content">
+          <div>
+            <h2>Download the latest macOS release.</h2>
+            <p>Get the latest DMG directly, then connect your Sony Reader and start moving books with the desktop app.</p>
+          </div>
+          <a class="primary site-link site-link--large" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg">Download for Mac</a>
+        </div>
       </section>
 
       <footer class="site-footer">
