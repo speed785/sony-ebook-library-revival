@@ -4,14 +4,16 @@ use std::process::Command;
 
 use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::Storage::FileSystem::{
-    GetDiskFreeSpaceExW, GetDriveTypeW, GetVolumeInformationW, DRIVE_REMOVABLE,
+    GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
 };
-use windows::Win32::System::WindowsProgramming::GetSystemDirectoryW;
 
 use crate::platform::{DetectedVolume, VolumeRole};
 
+// DRIVE_REMOVABLE = 2 per Win32 SDK — the windows crate exposes this as a plain u32
+const DRIVE_REMOVABLE: u32 = 2;
+
 pub fn discover_volumes() -> Result<Vec<DetectedVolume>, String> {
-    let drive_bits = unsafe { windows::Win32::Storage::FileSystem::GetLogicalDrives() };
+    let drive_bits = unsafe { GetLogicalDrives() };
     if drive_bits == 0 {
         return Ok(Vec::new());
     }
