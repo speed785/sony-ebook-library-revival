@@ -424,7 +424,7 @@ function renderWebLanding(root: HTMLDivElement): void {
             Sony's original setup software no longer fits modern Macs. This project keeps the useful parts alive: device access, book transfer, and a cleaner library workflow for older Sony readers.
           </p>
         </article>
-        <article class="site-card">
+        <article class="site-card site-card--feature">
           <p class="eyebrow">Desktop app</p>
           <h2>The app is the real tool.</h2>
           <p>
@@ -432,10 +432,10 @@ function renderWebLanding(root: HTMLDivElement): void {
           </p>
         </article>
         <article class="site-card">
-          <p class="eyebrow">Website</p>
-          <h2>The site explains the tool clearly.</h2>
+          <p class="eyebrow">Workflow</p>
+          <h2>Built for simple book transfer.</h2>
           <p>
-            The website focuses on product context, downloads, release links, and documentation without pretending to access local reader files.
+            Connect the reader, inspect mounted content, copy books in, export files back out, and use Calibre when you need format conversion or metadata cleanup.
           </p>
         </article>
         <article class="site-card">
@@ -446,6 +446,15 @@ function renderWebLanding(root: HTMLDivElement): void {
           </p>
         </article>
       </section>
+
+      <footer class="site-footer">
+        <p>Open-source macOS utility for classic Sony Readers.</p>
+        <div class="site-footer__links">
+          <a href="https://speed785.github.io/sony-ebook-library-revival/">Website</a>
+          <a href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg">Latest Mac download</a>
+          <a href="https://github.com/speed785/sony-ebook-library-revival/releases/latest">Latest release notes</a>
+        </div>
+      </footer>
     </main>
   `;
 }
