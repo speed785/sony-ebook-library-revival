@@ -368,25 +368,62 @@ function renderWebLanding(root: HTMLDivElement): void {
         <div class="site-hero__copy">
           <div class="hero__badge-wrap hero__badge-wrap--site">
             <img class="hero__brand" src="${assetUrl("brand-mark.svg")}" alt="Sony eBook Library Revival icon" />
-            <div class="hero__badge">Mac App + Project Site</div>
+            <div class="hero__badge">Desktop Reader Manager</div>
           </div>
           <h1>Sony eBook Library Revival</h1>
           <p>
-            A modern remake of Sony's classic Reader setup software. The Mac app does the real work:
-            detect devices, browse mounted files, and move books on and off the reader. This website is the public
-            home for the project and explains what the app does.
+            A modern remake of Sony's classic Reader setup software for current macOS. The app detects supported Sony
+            readers, browses mounted files, and helps move books on and off the device with a cleaner workflow.
           </p>
+          <div class="site-meta">
+            <span>macOS desktop app</span>
+            <span>PRS-era Sony Reader support</span>
+            <span>Open source</span>
+          </div>
           <div class="site-actions">
-            <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View the repo</a>
+            <a class="primary site-link" href="https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg">Download for Mac</a>
+            <a class="secondary site-link" href="https://github.com/speed785/sony-ebook-library-revival" target="_blank" rel="noreferrer">View the repo</a>
             <a class="secondary site-link" href="https://calibre-ebook.com/" target="_blank" rel="noreferrer">Why Calibre still matters</a>
           </div>
         </div>
-        <div class="site-hero__art">
-          <img src="${assetUrl("site-hero.svg")}" alt="Illustration of the Sony eBook Library Revival desktop app and reader workflow" />
+        <div class="site-preview" aria-label="Sony eBook Library Revival preview">
+          <div class="site-preview__window">
+            <div class="site-preview__toolbar"></div>
+            <div class="site-preview__content">
+              <div class="site-preview__sidebar">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="site-preview__main">
+                <div class="site-preview__line site-preview__line--title"></div>
+                <div class="site-preview__line"></div>
+                <div class="site-preview__line site-preview__line--short"></div>
+                <div class="site-preview__panel"></div>
+                <div class="site-preview__row">
+                  <div class="site-preview__chip"></div>
+                  <div class="site-preview__chip"></div>
+                  <div class="site-preview__chip"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="site-preview__device">
+            <div class="site-preview__screen">
+              <div class="site-preview__page"></div>
+            </div>
+          </div>
         </div>
       </section>
 
       <section class="site-grid">
+        <article class="site-card">
+          <p class="eyebrow">Purpose</p>
+          <h2>Why this project exists.</h2>
+          <p>
+            Sony's original setup software no longer fits modern Macs. This project keeps the useful parts alive: device access, book transfer, and a cleaner library workflow for older Sony readers.
+          </p>
+        </article>
         <article class="site-card">
           <p class="eyebrow">Desktop app</p>
           <h2>The app is the real tool.</h2>
@@ -396,9 +433,9 @@ function renderWebLanding(root: HTMLDivElement): void {
         </article>
         <article class="site-card">
           <p class="eyebrow">Website</p>
-          <h2>The site is now informational.</h2>
+          <h2>The site explains the tool clearly.</h2>
           <p>
-            Instead of pretending to be the app, the site acts as project documentation, a visual showcase, and a way for people to discover the Mac tool.
+            The website focuses on product context, downloads, release links, and documentation without pretending to access local reader files.
           </p>
         </article>
         <article class="site-card">

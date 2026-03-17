@@ -37,11 +37,16 @@ jobs:
         id: dmg
         run: |
           DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" -maxdepth 1 | head -n 1)
+          STABLE_PATH="$(dirname "$DMG_PATH")/Sony-eBook-Library-Revival-macOS.dmg"
+          cp "$DMG_PATH" "$STABLE_PATH"
           echo "path=$DMG_PATH" >> "$GITHUB_OUTPUT"
+          echo "stable_path=$STABLE_PATH" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.dmg.outputs.path }}
+          files: |
+            ${{ steps.dmg.outputs.path }}
+            ${{ steps.dmg.outputs.stable_path }}
           generate_release_notes: true
