@@ -5,59 +5,52 @@
 </p>
 
 <p align="center">
-  <img src="public/site-hero.svg" alt="Sony eBook Library Revival app preview" width="860" />
+  <img src="public/screenshots/app-overview.png" alt="Sony eBook Library Revival desktop app overview" width="900" />
 </p>
 
-A clean-room remake of the classic Sony Reader setup experience, rebuilt as:
+A modern macOS app for classic Sony Readers.
 
-- a modern macOS desktop app with Tauri
-- a TypeScript project website
+It replaces Sony's dead setup-era utility with a cleaner local workflow for browsing the device, moving books, and managing files on current Macs.
 
 Website: `https://speed785.github.io/sony-ebook-library-revival/`
 
-Releases: `https://github.com/speed785/sony-ebook-library-revival/releases`
+Latest release: `https://github.com/speed785/sony-ebook-library-revival/releases/latest`
 
-The goal is not to run Sony's old binary. The goal is to preserve the era and spirit of the original app while rebuilding it as a professional modern tool with an e-ink and aero-inspired visual direction.
+Direct Mac download: `https://github.com/speed785/sony-ebook-library-revival/releases/latest/download/Sony-eBook-Library-Revival-macOS.dmg`
 
-## What it does
+## What the app does
 
-- recreates the Sony setup flow with an e-ink meets aero interface
-- detects mounted Sony Reader volumes in the desktop app
-- shows connected-device details like model and available space
-- browses files on the Reader from the desktop app
-- supports drag-in import from Finder to the Reader
-- supports export of selected Reader files back to your Mac
-- includes a public informational website for the project
+- detects mounted Sony Reader volumes on macOS
+- shows device details like model, mounted volumes, filesystem, and storage usage
+- browses the reader with a tree view, file list, and details drawer
+- supports search, filtering, and sorting inside the reader workspace
+- imports books from Finder and exports selected files back to your Mac
+- keeps the public website focused on product information, screenshots, and downloads
 
-## Why there are two builds
+## Why this exists
 
-The desktop app has real device access. The website is intentionally informational: it explains the tool, shows branded artwork, and links people to the app and repo, while the Tauri app remains the only build that interacts with the Reader.
+Older Sony readers still work well, but their original Mac software does not. This project keeps the useful parts of that workflow alive without relying on abandoned storefronts, legacy installers, or dead sync services.
+
+## App and website
+
+- The desktop app is the real tool and has live device access
+- The website is informational and points people to the app, screenshots, and releases
+
+## Screenshots
+
+<p align="center">
+  <img src="public/screenshots/app-library.png" alt="Sony eBook Library Revival library browser" width="900" />
+</p>
 
 ## Stack
 
+- React + TypeScript
 - Vite
-- TypeScript
 - Tauri v2
 - Rust
+- Vitest + Testing Library
 - ESLint + Prettier
 - GitHub Actions
-
-## Branding
-
-- Web favicon: `public/brand-mark.svg`
-- Desktop app icon source: `src-tauri/icons/icon.png`
-- Desktop app bundle icon set: `src-tauri/icons/icon.icns`
-- The icon system is shared across the app, website, and docs
-
-Regenerate the macOS icon set with:
-
-```bash
-npm run icons:mac
-```
-
-## Dependency note
-
-`npm audit` is clean locally. The remaining GitHub security warning appears to come from upstream Rust GUI dependencies pulled in by Tauri's cross-platform stack, rather than from this project's own TypeScript dependencies.
 
 ## Development
 
@@ -67,7 +60,7 @@ Install dependencies:
 npm install
 ```
 
-Run the web app:
+Run the website/app frontend:
 
 ```bash
 npm run dev
@@ -79,7 +72,7 @@ Run the desktop app:
 npm run tauri:dev
 ```
 
-Build the web app:
+Build the website:
 
 ```bash
 npm run build
@@ -93,37 +86,52 @@ npm run tauri:build
 
 ## Quality checks
 
+Run the full project check set:
+
 ```bash
-npm run lint
-npm run format:check
-cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
-cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+npm run check
 ```
 
-## GitHub setup after publishing
+That includes:
 
-Recommended secure repo settings:
+- `npm run lint`
+- `npm run format:check`
+- `npm run test`
+- `npm run build`
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all --check`
+- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
 
-- default branch protection on `main`
-- required status checks from `CI`
-- Dependabot alerts and security updates enabled
-- secret scanning enabled
-- code scanning enabled
-- GitHub Pages source set to `GitHub Actions`
-- squash merge enabled, force pushes disabled on `main`
+## Screenshots and icons
 
-This repository already includes:
+Regenerate the macOS icon set:
 
-- CI workflow for lint, format, build, `cargo check`, and `clippy`
-- website deployment workflow
-- release workflow that publishes the macOS DMG for version tags like `v0.1.0`
-- CodeQL workflow
-- Dependabot config
-- security policy and issue templates
+```bash
+npm run icons:mac
+```
 
-## Current limitation
+Regenerate website screenshots from the app preview route:
 
-Dragging files into the app from Finder is implemented for desktop import. Export is currently handled with an explicit save flow so it works reliably on modern macOS. Direct drag-out from the webview to Finder would require a deeper native bridge.
+```bash
+npm run screenshots
+```
+
+Branding files:
+
+- Website/app icon source: `public/brand-mark.svg`
+- Desktop icon PNG: `src-tauri/icons/icon.png`
+- Desktop icon bundle: `src-tauri/icons/icon.icns`
+
+## Releases
+
+Version tags like `v0.1.0` trigger the release workflow and publish the macOS DMG automatically.
+
+The release page is here:
+
+`https://github.com/speed785/sony-ebook-library-revival/releases`
+
+## Security note
+
+`npm audit` is clean locally. The remaining moderate GitHub alert appears to come from upstream Rust GUI dependencies pulled in by Tauri's cross-platform stack rather than from this project's own TypeScript dependencies.
 
 ## Origins
 

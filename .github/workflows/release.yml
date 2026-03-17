@@ -43,10 +43,14 @@ jobs:
           echo "stable_path=$STABLE_PATH" >> "$GITHUB_OUTPUT"
           echo "name=$(basename "$DMG_PATH")" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare release notes
+        run: cp .github/release-notes.md /tmp/release-notes.md
+
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ steps.dmg.outputs.path }}
             ${{ steps.dmg.outputs.stable_path }}
+          body_path: /tmp/release-notes.md
           generate_release_notes: true

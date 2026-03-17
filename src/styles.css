@@ -76,11 +76,19 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   min-height: 46px;
   padding: 0 18px;
   border-radius: 999px;
   text-decoration: none;
   cursor: pointer;
+}
+
+.site-link svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  flex-shrink: 0;
 }
 
 .primary {
