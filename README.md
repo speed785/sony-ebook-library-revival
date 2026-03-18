@@ -194,6 +194,54 @@ Branding files:
 
 CSP is currently disabled (`"csp": null` in `tauri.conf.json`) to allow inline base64 preview images from the device. This is intentional for the desktop-only Tauri context.
 
+## Future improvements
+
+Things worth doing that didn't make the current cut, in rough priority order.
+
+### High value
+
+**Persistent metadata cache**
+The in-memory EPUB title and mount-path caches reset on every app launch. Writing a small JSON index to a platform cache directory (`~/.cache/sony-ebook-library-revival/`) would make repeat launches instant even on large libraries. The cache would be keyed by device volume serial + file path + modification timestamp, so stale entries are automatically invalidated.
+
+**Book collection / playlist management**
+The Sony PRS devices support a `booklist.xml` database that controls which books appear in collections on the device screen. Parsing and editing that file from the app would let you organise the on-device reading list without a third-party tool like Calibre.
+
+**Drag files out of the app into Finder / Explorer natively**
+The current "Drag to desktop" button triggers a Tauri drag session but only works when a file is already selected. A proper drag-source on individual rows — initiated on `mousedown` — would feel much more natural and match the interaction model of other macOS/Windows document apps.
+
+**Batch export**
+Export currently handles one file at a time. Selecting multiple rows and exporting to a chosen folder in a single action (with a progress indicator) would make bulk library moves significantly faster.
+
+### Medium value
+
+**Format conversion via Calibre CLI**
+If Calibre is installed, the app could offer an in-place "Convert to EPUB" action on LRF or PDF rows by shelling out to `ebook-convert`. This would bring the most common Calibre workflow into the app without requiring Calibre's GUI.
+
+**Live device watch**
+Instead of a manual Refresh button, the app could watch for USB mount/unmount events using `FSEvents` (macOS), `inotify` (Linux), or `ReadDirectoryChangesW` (Windows) and update the device state automatically. Tauri's `tauri-plugin-fs` already pulls in the necessary plumbing.
+
+**EPUB metadata editing**
+Most of the EPUB OPF parsing infrastructure is already in place for title extraction and cover preview. Extending it to let you edit `dc:title`, `dc:creator`, and `dc:subject` in the drawer — then write the changes back into the ZIP — would be a natural addition that covers the most common metadata fix scenario.
+
+**Keyboard navigation**
+The file list is currently click-only. Arrow key navigation between rows, `Enter` to open details, `Space` to toggle selection, `Delete` to prompt for removal, and `Cmd/Ctrl+A` to select all would make power users significantly faster.
+
+### Lower priority
+
+**Test coverage expansion**
+The test suite currently has two snapshot-style smoke tests. Unit tests for `formatBytes`, `formatDate`, `breadcrumbParts`, and the Rust `portable_relative` / `collect_matches` functions would catch regressions in the most frequently called utilities.
+
+**Windows code-signing**
+The Windows NSIS installer currently ships unsigned. Adding an Authenticode certificate via `TAURI_SIGNING_PRIVATE_KEY` in the release workflow would eliminate the SmartScreen warning on first launch.
+
+**Upgrade to Vite 8 + ESLint 10**
+Both are currently pinned at major versions below latest due to breaking config changes. These are worth revisiting once the ecosystem adapts — Vite 8's new build pipeline is meaningfully faster, and ESLint 10's flat config is strictly cleaner than what we have.
+
+**`actions/cache` v5**
+Currently on v4 which produces a Node 20 deprecation annotation. Will be a one-line bump once GitHub releases v5.
+
+---
+
 ## Origins
 
 Informed by the launcher resources found on classic Sony Reader devices, including the `Setup eBook Library.app` bundle mounted from the device launcher volume. Rebuilt from scratch for current macOS — not a port of the original.
