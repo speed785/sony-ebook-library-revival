@@ -60,6 +60,8 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Sony eBook Library Revival ${{ github.ref_name }}"
-          releaseBodyPath: .github/release-notes.md
+          releaseBody: |
+            See [release notes](${{ github.server_url }}/${{ github.repository }}/blob/main/.github/release-notes.md) for what's new.
           releaseDraft: false
           prerelease: false
+          generateReleaseNotes: true

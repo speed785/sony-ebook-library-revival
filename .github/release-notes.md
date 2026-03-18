@@ -1,26 +1,25 @@
-## What’s New
+## What's new in v0.1.0
 
-- polished the macOS app shell for a clearer Sony Reader workflow
-- improved navigation, metadata, and details inside the reader workspace
-- refreshed screenshots, branding, and download presentation
+First cross-platform release — macOS, Windows, and Linux.
 
-## Download
+### Highlights
 
-- Stable latest DMG: `Sony-eBook-Library-Revival-macOS.dmg`
-- Versioned DMG: use the tagged asset below for archival/reproducible installs
+- **macOS, Windows, Linux** — full native installers for all three platforms (DMG, MSI/NSIS, AppImage/deb/rpm)
+- **Faster** — reader mount path and EPUB titles cached in-memory; search debounced; directory loads parallelised; PDF previews off the main thread
+- **Redesigned UI** — cool e-paper × aero chrome palette, frosted glass panels, Geist font, compositor-only animations
+- **New app icon** — dark navy glass tile with e-reader silhouette, matching the updated design language
+- **Component architecture** — `DesktopApp.tsx` split into focused, memoised components for better render performance
 
-## Highlights
+### Downloads
 
-![App Overview](https://speed785.github.io/sony-ebook-library-revival/screenshots/app-overview.png)
+| Platform              | Installer                       |
+| --------------------- | ------------------------------- |
+| macOS (Apple Silicon) | `.dmg`                          |
+| Windows               | `.msi` or NSIS `.exe`           |
+| Linux                 | `.AppImage` or `.deb` or `.rpm` |
 
-![Library Browser](https://speed785.github.io/sony-ebook-library-revival/screenshots/app-library.png)
+### Notes
 
-## Notes
-
-- Built for current macOS systems
-- Designed for classic Sony Reader hardware and local USB workflows
-- If a connected reader is not detected, reconnect it over USB and refresh the app
-
-## Full Changelog
-
-See GitHub’s generated release notes below.
+- Connect your Sony Reader over USB before launching the app
+- If the device is not detected, use the Refresh button in the toolbar
+- Requires `poppler-utils` on Linux for PDF preview (`sudo apt install poppler-utils` or equivalent)
